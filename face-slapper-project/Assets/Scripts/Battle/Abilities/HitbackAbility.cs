@@ -20,6 +20,10 @@ namespace FaceSlapper.Battle
         {
             base.OnUse();
 
+            // 播放耳光动画（经 AnimComponent 同步到所有端）。
+            var anim = GetComponent<AnimComponent>();
+            if (anim != null) anim.PlaySlap();
+
             NetworkIdentity self = GetComponent<NetworkIdentity>();
             if (self == null) return;
 
