@@ -45,6 +45,17 @@ namespace FaceSlapper.Core
                 GUILayout.Label(_lines[i]);
             GUILayout.EndScrollView();
 
+            string[] usefulCmd = {"Host", "Join", "StartGame"};
+            for(int i= 0 ; i<usefulCmd.Length; i++)
+            {
+                string str = usefulCmd[i];
+                if(GUI.Button(new Rect(0, 0 + i*22, 40, 20), str))
+                {
+                    string cmd = $"/gm func {str}";
+                    Execute(cmd);
+                }
+            }
+
             GUI.SetNextControlName("GMInput");
             _input = GUILayout.TextField(_input, GUILayout.Height(24));
             if (_focusRequested)
