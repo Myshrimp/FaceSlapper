@@ -72,7 +72,9 @@ namespace FaceSlapper.EditorTools
             try
             {
                 Rigidbody rb = root.AddComponent<Rigidbody>();
-                rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+                // 转向完全由代码（Movement.MoveRotation）驱动，冻结全部物理旋转，
+                // 防止玩家间碰撞产生的力矩让角色持续打转。
+                rb.constraints = RigidbodyConstraints.FreezeRotation;
                 rb.interpolation = RigidbodyInterpolation.Interpolate;
                 rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 

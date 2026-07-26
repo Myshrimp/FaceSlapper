@@ -98,6 +98,10 @@ namespace FaceSlapper.Battle
             Vector3 dir = new Vector3(axis.x, 0f, axis.y);
             float speed = _moveSpeed * _speedMultiplier;
 
+            // 清除碰撞带来的残余角速度（双保险，Prefab 上已冻结旋转）。
+            if (_rb.angularVelocity.sqrMagnitude > 0.0001f)
+                _rb.angularVelocity = Vector3.zero;
+
             Vector3 velocity = _rb.velocity;
             if (_knockbackTimer > 0f)
             {
