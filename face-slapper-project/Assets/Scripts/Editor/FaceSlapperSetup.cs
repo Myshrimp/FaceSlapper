@@ -121,6 +121,7 @@ namespace FaceSlapper.EditorTools
                 SetRendererArray(identity, "_tintRenderers", tintRenderers);
                 root.AddComponent<Movement>();
                 root.AddComponent<AbilityComponent>();
+                root.AddComponent<BuffComponent>();
                 root.AddComponent<HitbackAbility>();
                 root.AddComponent<PickWeaponAbility>();
                 root.AddComponent<SpeedUpAbility>();

@@ -18,6 +18,7 @@ namespace FaceSlapper.Battle
         private NetObject _netObject;
         private PickWeaponAbility _pickWeapon;
         private SpeedUpAbility _speedUp;
+        private BuffComponent _buffComponent;
 
         /// <summary>当前持有的武器（可能为 null）。</summary>
         public WeaponBase HeldWeapon => _pickWeapon != null ? _pickWeapon.HeldWeapon : null;
@@ -31,6 +32,7 @@ namespace FaceSlapper.Battle
 
             _pickWeapon = GetComponent<PickWeaponAbility>();
             _speedUp = GetComponent<SpeedUpAbility>();
+            _buffComponent = GetComponent<BuffComponent>();
         }
 
         private void OnDestroy()
@@ -40,12 +42,14 @@ namespace FaceSlapper.Battle
             _abilities.Clear();
         }
 
-        /// <summary>按名字触发技能（受冷却限制）。</summary>
+        /// <summary>按名字触发技能（受冷却限制）；触发后通知 BuffComponent 施加增益。</summary>
         public bool UseAbility(string abilityName)
         {
             IAbility ability = _abilities.Find(a => a.GetName() == abilityName);
             if (ability == null || !ability.CanUse) return false;
             ability.OnUse();
+            // 角色使用技能时受到 Buff 增益。
+            if (_buffComponent != null) _buffComponent.OnAbilityUsed(ability);
             return true;
         }
 

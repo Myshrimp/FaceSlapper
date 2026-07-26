@@ -27,6 +27,10 @@ namespace FaceSlapper.Battle
             NetworkIdentity self = GetComponent<NetworkIdentity>();
             if (self == null) return;
 
+            // Buff 增益：技能威力受 BuffComponent 倍率加成。
+            BuffComponent buffs = GetComponent<BuffComponent>();
+            float force = _force * (buffs != null ? buffs.GetPowerMultiplier() : 1f);
+
             Transform t = transform;
             Vector3 center = t.position + Vector3.up * 1f + t.forward * (_range * 0.5f);
             Collider[] hits = Physics.OverlapSphere(center, _radius);
@@ -42,7 +46,7 @@ namespace FaceSlapper.Battle
                 if (dir.sqrMagnitude < 0.001f) dir = t.forward;
                 dir.Normalize();
 
-                self.ReportHit(nob.NetId, dir, _force, _range + 1.5f);
+                self.ReportHit(nob.NetId, dir, force, _range + 1.5f);
             }
         }
     }
