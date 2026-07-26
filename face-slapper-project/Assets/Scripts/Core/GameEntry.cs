@@ -1,4 +1,5 @@
 using FaceSlapper.Input;
+using FaceSlapper.Match;
 using FaceSlapper.Network;
 using FaceSlapper.Room;
 using UnityEngine;
@@ -25,6 +26,7 @@ namespace FaceSlapper.Core
             gm.AddAndRegister<TickComponent>();
             gm.AddAndRegister<SceneManagementComponent>();
             gm.AddAndRegister<RoomHandler>();
+            gm.AddAndRegister<MatchHandler>();
             gm.AddAndRegister<GMComponent>();
 
             // GM 调试命令行（IMGUI，不属于注册组件）。

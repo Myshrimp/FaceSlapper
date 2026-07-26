@@ -70,9 +70,12 @@ Assets/Scripts/
 │       └─ FishNetNetObjectBridge.cs  NetworkBehaviour 桥接（RPC/NetVar/Transform 通道）
 ├─ Network/         NetworkComponent（Host/Join/Stop 封装）、TickComponent
 ├─ Room/            RoomComponent, RoomHandler, RoomPlayerInfo
+├─ Match/           MatchComponent（对局管理器，服务器权威状态机）, MatchHandler,
+│                   MatchTypes(MatchState/MatchPlayerInfo), GameMode(GameModeBase + 模式注册表)
 ├─ Camera/          TopDownCamera
 ├─ Battle/          NetworkIdentity, Movement, PlayerSpawnPoints,
-│                   Abilities/(IAbility, AbilityComponent, Hitback, PickWeapon, SpeedUp)
+│                   Abilities/(IAbility, AbilityComponent, Hitback, PickWeapon, SpeedUp),
+│                   Buff/(IBuff, BuffBase, BuffComponent, PowerBuff)
 ├─ Weapon/          IWeapon, WeaponBase, SlapperWeapon
 └─ Editor/          FaceSlapperSetup（后端感知的一键搭建）
 ```

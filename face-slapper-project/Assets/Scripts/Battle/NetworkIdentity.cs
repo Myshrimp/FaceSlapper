@@ -1,4 +1,5 @@
 using FaceSlapper.Core;
+using FaceSlapper.Match;
 using FaceSlapper.Networking;
 using UnityEngine;
 
@@ -71,6 +72,10 @@ namespace FaceSlapper.Battle
             if (victimIdentity == null || victim.OwnerClientId < 0) return;
 
             victimIdentity.SendTargetRpc(victim.OwnerClientId, nameof(TargetApplyKnockback), direction, force);
+
+            // 命中经服务器校验有效，通知对局管理器计分。
+            if (MatchComponent.ServerInstance != null)
+                MatchComponent.ServerInstance.NotifyHitConfirmed(PlayerId.Value, victimIdentity.PlayerId.Value);
         }
 
         /// <summary>在受害者的 Owner 端执行击飞（该端是移动的权威端）。</summary>

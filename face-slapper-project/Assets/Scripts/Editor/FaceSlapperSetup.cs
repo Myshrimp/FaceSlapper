@@ -1,5 +1,6 @@
 using FaceSlapper.Battle;
 using FaceSlapper.Core;
+using FaceSlapper.Match;
 using FaceSlapper.Networking;
 using FaceSlapper.Room;
 using FaceSlapper.Weapon;
@@ -245,6 +246,7 @@ namespace FaceSlapper.EditorTools
             // 房间（场景网络对象）。
             var roomGo = new GameObject("Room");
             var room = roomGo.AddComponent<RoomComponent>();
+            roomGo.AddComponent<MatchComponent>();
             Net.Backend.EditorEnsurePrefabComponents(roomGo);
             SetObjectReference(room, "_playerPrefab", playerPrefab.GetComponent<NetObject>());
             SetObjectReference(room, "_weaponPrefab", weaponPrefab.GetComponent<NetObject>());

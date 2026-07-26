@@ -1,3 +1,4 @@
+using FaceSlapper.Match;
 using FaceSlapper.Room;
 using UnityEngine;
 
@@ -10,6 +11,8 @@ namespace FaceSlapper.Core
     public class GMComponent : MonoBehaviour, IGameComponent
     {
         private RoomHandler Room => GameManager.Instance.Get<RoomHandler>();
+
+        private MatchHandler Match => GameManager.Instance.Get<MatchHandler>();
 
         public void OnInit() { }
 
@@ -63,6 +66,48 @@ namespace FaceSlapper.Core
         public string SetTeam(int clientId, int teamId)
         {
             return Room.SetTeam(clientId, teamId) ? $"已请求设置玩家 {clientId} 为队伍 {teamId}" : "失败：未连接网络";
+        }
+
+        /// <summary>列出所有可选模式。用法: ListModes</summary>
+        public string ListModes()
+        {
+            return Match.ListModes();
+        }
+
+        /// <summary>选择对局模式。用法: SelectMode score_race</summary>
+        public string SelectMode(string modeId)
+        {
+            return Match.SelectMode(modeId) ? $"已请求选择模式 {modeId}" : "失败：未连接网络";
+        }
+
+        /// <summary>注册本机玩家到对局（需已选择模式）。用法: RegisterPlayer</summary>
+        public string RegisterPlayer()
+        {
+            return Match.Register() ? "已请求注册本机玩家" : "失败：未连接网络";
+        }
+
+        /// <summary>注销本机玩家。用法: UnregisterPlayer</summary>
+        public string UnregisterPlayer()
+        {
+            return Match.Unregister() ? "已请求注销本机玩家" : "失败：未连接网络";
+        }
+
+        /// <summary>开始对局。用法: StartMatch</summary>
+        public string StartMatch()
+        {
+            return Match.StartMatch() ? "开始指令已发送" : "失败：未连接网络或找不到 MatchComponent";
+        }
+
+        /// <summary>结束对局（按当前比分结算）。用法: EndMatch</summary>
+        public string EndMatch()
+        {
+            return Match.EndMatch() ? "结束指令已发送" : "失败：未连接网络";
+        }
+
+        /// <summary>打印当前对局信息。用法: MatchInfo</summary>
+        public string MatchInfo()
+        {
+            return Match.MatchInfo();
         }
 
         /// <summary>写一条日志。用法: Log hello</summary>

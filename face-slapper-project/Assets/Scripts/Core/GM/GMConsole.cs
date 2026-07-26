@@ -102,7 +102,7 @@ namespace FaceSlapper.Core
 
             string methodName;
             string[] args;
-            Match parens = Regex.Match(s, @"^(\w+)\s*\((.*)\)\s*$");
+            System.Text.RegularExpressions.Match parens = Regex.Match(s, @"^(\w+)\s*\((.*)\)\s*$");
             if (parens.Success)
             {
                 methodName = parens.Groups[1].Value;
