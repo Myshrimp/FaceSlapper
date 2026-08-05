@@ -76,6 +76,14 @@ namespace FaceSlapper.Room
             return true;
         }
 
+        /// <summary>请求设置队伍。</summary>
+        public bool SetMode(string modeId)
+        {
+            if (!RoomReady(out RoomComponent room)) return false;
+            room.RequestSetMode(modeId);
+            return true;
+        }
+
         /// <summary>打印并返回房间玩家列表。</summary>
         public string ListPlayers()
         {

@@ -69,6 +69,14 @@ namespace FaceSlapper.Match
         public override float Duration => 120f;
     }
 
+    /// <summary>计时赛：时间结束时分数最高者获胜。</summary>
+    public class CardGameMode : GameModeBase
+    {
+        public override string ModeId => "card_game";
+        public override string DisplayName => "卡牌";
+        public override float Duration => 0f;
+    }
+
     /// <summary>模式注册表（纯本地，各端一致）。</summary>
     public static class GameModes
     {
@@ -78,6 +86,7 @@ namespace FaceSlapper.Match
         {
             Register(new ScoreRaceMode());
             Register(new TimedScoreMode());
+            Register(new  CardGameMode());
         }
 
         public static void Register(GameModeBase mode) => ById[mode.ModeId] = mode;

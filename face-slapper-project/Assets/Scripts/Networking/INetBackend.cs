@@ -91,6 +91,8 @@ namespace FaceSlapper.Networking
         /// <summary>以网络同步方式加载全局场景（仅服务器）。</summary>
         void LoadGlobalScene(string sceneName);
 
+        void UnloadGlobalScene(string sceneName);
+
         // ---------------- 编辑器集成（搭建工具用） ----------------
 #if UNITY_EDITOR
         /// <summary>确保 NetworkManager 等后端管理物体存在于场景中。</summary>

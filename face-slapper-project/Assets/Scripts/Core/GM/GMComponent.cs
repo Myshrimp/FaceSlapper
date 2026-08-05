@@ -68,6 +68,12 @@ namespace FaceSlapper.Core
             return Room.SetTeam(clientId, teamId) ? $"已请求设置玩家 {clientId} 为队伍 {teamId}" : "失败：未连接网络";
         }
 
+        /// <summary>设置玩家队伍。用法: SetTeam 0 1</summary>
+        public string SetMode(string modeId)
+        {
+            return Room.SetMode(modeId) ? $"已请求设置游戏模式为 {modeId}" : "失败：未连接网络";
+        }
+
         /// <summary>列出所有可选模式。用法: ListModes</summary>
         public string ListModes()
         {

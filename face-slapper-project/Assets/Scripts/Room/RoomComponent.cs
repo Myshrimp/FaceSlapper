@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FaceSlapper.Battle;
 using FaceSlapper.Core;
+using FaceSlapper.Match;
 using FaceSlapper.Networking;
 using UnityEngine;
 
@@ -27,6 +28,7 @@ namespace FaceSlapper.Room
         /// <summary>服务器端：clientId -> 已生成的玩家对象。</summary>
         private readonly Dictionary<int, NetObject> _serverPlayers = new Dictionary<int, NetObject>();
 
+        private GameModeBase _curMode;
         protected override void Awake()
         {
             base.Awake();
@@ -87,6 +89,10 @@ namespace FaceSlapper.Room
         /// <summary>请求设置玩家队伍。</summary>
         public void RequestSetTeam(int clientId, int teamId) => SendServerRpc(nameof(CmdSetTeam), clientId, teamId);
 
+        public void RequestSetMode(string modeId) => SendServerRpc(nameof(CmdSetGameMode), modeId);
+
+        public void RequestSpawnPlayers() => SendServerRpc(nameof(CmdSpawnPlayers));
+
         [NetRpc]
         private void CmdStartGame()
         {
@@ -96,6 +102,24 @@ namespace FaceSlapper.Room
                 return;
             }
 
+            switch (_curMode.ModeId)
+            {
+                case "card_game":
+                    if (_curMode.ModeId == "card_game")
+                    {
+                        var sm = GameManager.Instance.Get<SceneManagementComponent>();
+                        sm.UnloadScene("Main");
+                        sm.LoadScene("card_game");
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        [NetRpc]
+        private void CmdSpawnPlayers()
+        {
             int index = 0;
             foreach (int clientId in Net.Server.ClientIds)
             {
@@ -147,6 +171,12 @@ namespace FaceSlapper.Room
                     return;
                 }
             }
+        }
+
+        [NetRpc]
+        private void CmdSetGameMode(string modeId)
+        {
+            _curMode = GameModes.Get(modeId);
         }
 
         private int GetTeamOf(int clientId)

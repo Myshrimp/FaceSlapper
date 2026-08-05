@@ -22,6 +22,20 @@ namespace FaceSlapper.Core
             return true;
         }
 
+        /// <summary>以"全局场景"方式加载（服务器发起，所有客户端跟随）。仅服务器可调用。</summary>
+        public bool UnloadGlobalScene(string sceneName)
+        {
+            if (!Net.IsServer)
+            {
+                Debug.LogWarning("[SceneHandler] 离线或非服务器，使用本地场景卸载。");
+                UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(sceneName);
+                return false;
+            }
+
+            Net.Backend.UnloadGlobalScene(sceneName);
+            return true;
+        }
+
         /// <summary>仅加载本地场景（不参与网络同步）。</summary>
         public void LoadLocalScene(string sceneName)
         {

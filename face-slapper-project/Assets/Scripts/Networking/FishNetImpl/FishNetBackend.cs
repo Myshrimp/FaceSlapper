@@ -194,6 +194,13 @@ namespace FaceSlapper.Networking.FishNetImpl
             NM.SceneManager.LoadGlobalScenes(sld);
         }
 
+        public void UnloadGlobalScene(string sceneName)
+        {
+            if(NM == null || !IsServer) return;
+            var sld = new SceneUnloadData(sceneName);
+            NM.SceneManager.UnloadGlobalScenes(sld);
+        }
+
         // ---------------- 事件转发（由 Runner 回调） ----------------
 
         internal void RaiseRemoteClientConnected(int clientId) => OnRemoteClientConnected?.Invoke(clientId);

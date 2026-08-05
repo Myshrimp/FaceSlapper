@@ -13,5 +13,6 @@ namespace FaceSlapper.Core
 
         /// <summary>网络全局场景加载（服务器）或本地加载（离线回退）。</summary>
         public bool LoadScene(string sceneName) => Handler.LoadGlobalScene(sceneName);
+        public bool UnloadScene(string sceneName) => Handler.UnloadGlobalScene(sceneName);
     }
 }
