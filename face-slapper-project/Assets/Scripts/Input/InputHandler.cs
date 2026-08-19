@@ -19,6 +19,7 @@ namespace FaceSlapper.Input
         public KeyCode Pickup = KeyCode.E;
         public KeyCode Hitback = KeyCode.Q;
         public KeyCode SpeedUp = KeyCode.LeftShift;
+        public KeyCode Jump = KeyCode.Space;
 
         // 鼠标
         public int AttackButton = 0;
@@ -37,6 +38,7 @@ namespace FaceSlapper.Input
             snapshot.AttackPressed = UnityEngine.Input.GetMouseButtonDown(AttackButton);
             snapshot.PickupPressed = IsDownOnce(Pickup);
             snapshot.HitbackPressed = IsDownOnce(Hitback);
+            snapshot.JumpPressed = IsDownOnce(Jump);
             snapshot.SpeedUpHeld = IsDown(SpeedUp) || IsDown(KeyCode.RightShift);
             snapshot.ScrollDelta = UnityEngine.Input.mouseScrollDelta.y;
 

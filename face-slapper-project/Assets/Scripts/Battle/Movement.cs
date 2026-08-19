@@ -25,10 +25,17 @@ namespace FaceSlapper.Battle
         [SerializeField] private float _knockbackRecoverTime = 0.35f;
         [SerializeField] private float _knockbackUpRatio = 0.5f;
 
+        [Header("跳跃")]
+        [Tooltip("起跳瞬间的竖直速度（米/秒）")]
+        [SerializeField] private float _jumpSpeed = 7f;
+        [Tooltip("地面检测射线长度（从脚底向下）")]
+        [SerializeField] private float _groundCheckDistance = 0.15f;
+
         private Rigidbody _rb;
         private NetObject _netObject;
         private float _speedMultiplier = 1f;
         private float _knockbackTimer;
+        private bool _jumpQueued; // Update 中缓存跳跃输入，FixedUpdate 消费，避免低物理频率下丢输入。
 
         public float SpeedMultiplier => _speedMultiplier;
 
@@ -83,6 +90,18 @@ namespace FaceSlapper.Battle
             }
         }
 
+        private void Update()
+        {
+            if (!_netObject.IsSpawned || !_netObject.IsOwner) return;
+            if (!GameManager.HasInstance) return;
+
+            // GetKeyDown 只在按下那一帧为 true，而 FixedUpdate 可能几帧才跑一次，
+            // 必须在这里按帧缓存，否则高帧率下跳跃输入会被下一帧的空快照覆盖而丢失。
+            InputComponent input = GameManager.Instance.Get<InputComponent>();
+            if (input != null && input.Current.JumpPressed)
+                _jumpQueued = true;
+        }
+
         private void FixedUpdate()
         {
             if (!_netObject.IsSpawned || !_netObject.IsOwner) return;
@@ -103,6 +122,14 @@ namespace FaceSlapper.Battle
                 _rb.angularVelocity = Vector3.zero;
 
             Vector3 velocity = _rb.velocity;
+
+            // 起跳：仅在地面上且非击飞硬直时生效，直接给竖直速度；不满足条件则丢弃本次输入。
+            if (_jumpQueued)
+            {
+                _jumpQueued = false;
+                if (_knockbackTimer <= 0f && IsGrounded())
+                    velocity.y = _jumpSpeed;
+            }
             if (_knockbackTimer > 0f)
             {
                 // 击飞中：只给很弱的空中控制，保留击退手感。
@@ -144,6 +171,17 @@ namespace FaceSlapper.Battle
         public void SetSpeedMultiplier(float multiplier)
         {
             _speedMultiplier = Mathf.Max(0f, multiplier);
+        }
+
+        /// <summary>
+        /// 地面检测：从脚底略高处向下打射线。
+        /// 射线起点在自身胶囊体内部，射线不会命中自身（背面不命中），因此无需 LayerMask 排除。
+        /// </summary>
+        private bool IsGrounded()
+        {
+            Vector3 origin = transform.position + Vector3.up * 0.05f;
+            return Physics.Raycast(origin, Vector3.down, _groundCheckDistance + 0.05f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
         }
     }
 }

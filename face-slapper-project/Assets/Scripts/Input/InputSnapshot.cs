@@ -17,6 +17,9 @@ namespace FaceSlapper.Input
         /// <summary>击飞技能键按下（Q）。</summary>
         public bool HitbackPressed;
 
+        /// <summary>跳跃键按下（空格，按下那一帧为 true）。</summary>
+        public bool JumpPressed;
+
         /// <summary>加速键按住（Left Shift）。</summary>
         public bool SpeedUpHeld;
 
