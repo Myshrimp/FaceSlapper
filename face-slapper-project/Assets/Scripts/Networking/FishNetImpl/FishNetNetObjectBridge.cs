@@ -120,9 +120,10 @@ namespace FaceSlapper.Networking.FishNetImpl
         // ---------------- FishNet RPC 通道 ----------------
 
         [ServerRpc(RequireOwnership = false)]
-        private void RpcToServer(string method, byte[] args, Channel channel = Channel.Reliable)
+        private void RpcToServer(string method, byte[] args, Channel channel = Channel.Reliable, NetworkConnection conn = null)
         {
-            _netObject.DispatchRpc(method, NetSerializer.ReadArgs(args));
+            int senderClientId = conn != null && conn.IsValid ? conn.ClientId : -1;
+            _netObject.DispatchRpc(method, NetSerializer.ReadArgs(args), senderClientId);
         }
 
         [ObserversRpc]

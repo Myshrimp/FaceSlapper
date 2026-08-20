@@ -15,6 +15,9 @@ namespace FaceSlapper.Input
         /// <summary>本帧输入快照。</summary>
         public InputSnapshot Current { get; private set; }
 
+        public InputSnapshot OverrideSnap;
+        public bool IsOverride;
+
         public void OnInit() { }
 
         public void OnShutdown() { }
@@ -22,6 +25,10 @@ namespace FaceSlapper.Input
         public void OnUpdate(float deltaTime)
         {
             Current = GMConsole.IsOpen ? new InputSnapshot() : Handler.Poll();
+            if(IsOverride)
+            {
+                Current = OverrideSnap;
+            }
             EventBus.Publish(new LocalInputEvent { Snapshot = Current });
         }
     }

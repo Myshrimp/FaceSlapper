@@ -40,6 +40,12 @@ namespace FaceSlapper.Networking
         /// <summary>收到远端位置/旋转（NetTransformSync 使用）。</summary>
         public event Action<Vector3, Quaternion> OnTransformReceived;
 
+        /// <summary>
+        /// 正在派发的 ServerRpc 的发送者 ClientId，仅在 [NetRpc] 方法执行期间有效；
+        /// -1 表示服务器本地调用或观察者/定向 RPC（无法/无需区分发送者）。
+        /// </summary>
+        public int RpcSenderClientId { get; private set; } = -1;
+
         // ---------------- 内部状态 ----------------
 
         private INetObjectBridge _bridge;
@@ -112,13 +118,19 @@ namespace FaceSlapper.Networking
             _bridge.SendTargetRpc(clientId, method, NetSerializer.WriteArgs(args));
         }
 
-        internal void DispatchRpc(string method, object[] args)
+        internal void DispatchRpc(string method, object[] args, int senderClientId = -1)
         {
             BuildRpcTable();
             if (_rpcTable.TryGetValue(method, out RpcTarget target))
+            {
+                RpcSenderClientId = senderClientId;
                 target.Invoke(args);
+                RpcSenderClientId = -1;
+            }
             else
+            {
                 Debug.LogWarning($"[NetObject] {name} 上未找到 [NetRpc] 方法: {method}");
+            }
         }
 
         private void BuildRpcTable()

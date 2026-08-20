@@ -717,18 +717,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &857161167
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 857161161}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e05d44db492349408997790b83e0047e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &857161162
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -813,7 +801,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 395da8af7a98bcf43acac82c70e9fbbc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _playerPrefab: {fileID: 454289510140660885, guid: b34a7fd84251c6f48b86d21a59c56c94,
+  _playerPrefab: {fileID: 8568332587573572317, guid: b4a5037fd27967d439edf5ad8a4f4e1b,
     type: 3}
   _weaponPrefab: {fileID: 7229513600847585491, guid: 6edee513a7eb4f34b91de342db349b93,
     type: 3}
@@ -844,6 +832,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &857161167
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 857161161}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e05d44db492349408997790b83e0047e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1426628922
 GameObject:
   m_ObjectHideFlags: 0
