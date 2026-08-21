@@ -9,13 +9,13 @@ using UnityEngine;
 namespace FaceSlapper.FrameSync
 {
     /// <summary>
-    /// 帧同步管理器（场景网络对象，挂在 Room 物体上）：确定性 lockstep 会话。
+    /// 帧同步管理器（场景网络对象，挂在 Room 物体上）：乐观帧同步（预测 + 回滚）会话。
     /// 服务器中继模式：各端 30Hz 采集本地输入上行（ServerRpc），服务器校验后广播（ObserversRpc）。
-    /// 协议规则由 <see cref="FrameSyncProtocol"/> 保证：
-    ///   1. 输入封存——只消费服务器广播回来的确认输入，本地采样不直接进入模拟；
-    ///   2. 服务器校验——每玩家 tick 严格连续、首提优先、掉线拒收；
-    ///   3. 掉线按统一生效 tick 移除，与各端推进进度无关；
-    ///   4. 模拟状态权威数据在管理器数组中，实体（GameObject）仅作渲染载体。
+    /// 分层职责：
+    ///   - <see cref="FrameSyncProtocol"/>：输入封存（只消费服务器广播的确认输入）、服务器转发校验
+    ///     （严格连续/首提优先/掉线拒收）、掉线统一生效 tick、全员确认连续水位线；
+    ///   - <see cref="FrameSyncSession"/>：客户端预测推进 + 快照回滚重放（模拟状态权威数据）；
+    ///   - 本类：RPC 粘合、本地采样节拍、实体（GameObject）渲染写回、确认哈希上报。
     /// 与现有状态同步（Player.prefab 链路）完全解耦，由 GM 命令 StartFrameSync/StopFrameSync 驱动。
     /// </summary>
     public class FrameSyncManager : NetBehaviour
@@ -35,15 +35,15 @@ namespace FaceSlapper.FrameSync
         public bool IsRunning { get; private set; }
 
         /// <summary>已模拟的 tick 数（下一个待模拟的 tick 序号）。</summary>
-        public int SimTick => _simTick;
+        public int SimTick => _session.SimTick;
 
         /// <summary>渲染插值系数（0~1，FrameSyncRender 使用）。</summary>
         public float RenderAlpha => Mathf.Clamp01(_simAccumulator / FrameSyncConfig.TickSeconds);
 
-        // ---------------- 协议层 ----------------
+        // ---------------- 协议与会话 ----------------
 
-        /// <summary>客户端角色：确认输入存储、成员移除调度。</summary>
-        private readonly FrameSyncProtocol _session = new FrameSyncProtocol();
+        /// <summary>客户端会话：预测推进 + 回滚重放（内含协议层实例）。</summary>
+        private readonly FrameSyncSession _session = new FrameSyncSession();
 
         /// <summary>服务器角色：输入转发校验、掉线生效 tick。</summary>
         private readonly FrameSyncProtocol _relay = new FrameSyncProtocol();
@@ -56,19 +56,16 @@ namespace FaceSlapper.FrameSync
         private bool _pendingStart;                          // 已收到开局广播，等待本地对象就位
         private readonly List<FrameSyncMovement> _entities = new List<FrameSyncMovement>(8); // 按 clientId 升序
 
-        private int _simTick;
-        private int _localInputTick;
         private float _simAccumulator;
         private float _inputAccumulator;
+        private int _localInputTick;
         private bool _stallLogged;
         private int _pendingButtons;                         // 边沿按键在采样间隙累积，防丢输入
+        private int _nextHashReport;                         // 下一个待上报的哈希 tick（仅确认水位线内）
 
-        // 批处理缓冲（roster 下标对齐，TryBeginSimulation 时分配）。
-        // ★ _batchStates 是模拟状态的权威数据：逐 tick 延续，不依赖实体对象存活。
+        // 渲染写回缓冲（roster 下标对齐，TryBeginSimulation 时分配）。
         private FrameSyncMovement[] _rosterEntities = new FrameSyncMovement[0];
-        private PlayerSimState[] _batchStates = new PlayerSimState[0];
-        private FrameInput[] _batchInputs = new FrameInput[0];
-        private bool[] _batchActive = new bool[0];
+        private PlayerSimState[] _renderStates = new PlayerSimState[0];
 
         // 服务器端哈希校验基线：tick -> (hash, 首个上报者)
         private readonly Dictionary<int, int> _hashBaseline = new Dictionary<int, int>();
@@ -76,28 +73,21 @@ namespace FaceSlapper.FrameSync
 
         // ---------------- 诊断 ----------------
 
-        private readonly Dictionary<int, FrameInput> _lastAppliedInputs = new Dictionary<int, FrameInput>();
-        private float _debugLogUntil;
-
-        /// <summary>
-        /// GM 诊断：返回会话映射快照（各玩家活跃标记/位置/最近输入/确认水位），
-        /// 并在接下来 5 秒内逐 tick 打印每个实体消费的输入，用于定位输入映射问题。
-        /// </summary>
+        /// <summary>GM 诊断：返回会话快照（水位线/回滚统计/各玩家位置与确认水位）。</summary>
         public string DumpDebugState()
         {
             var sb = new StringBuilder(256);
-            sb.Append($"localId={Net.LocalClientId} running={IsRunning} pending={_pendingStart} simTick={_simTick} ");
-            sb.Append($"roster=[{JoinInts(_roster)}] | ");
+            sb.Append($"localId={Net.LocalClientId} running={IsRunning} pending={_pendingStart} " +
+                      $"simTick={_session.SimTick} 水位线={_session.ConfirmedWaterline} " +
+                      $"回滚次数={_session.RollbackCount} 最大深度={_session.MaxRollbackDepth} " +
+                      $"desync={_session.Desynced} | ");
             for (int i = 0; i < _roster.Length; i++)
             {
                 int id = _roster[i];
-                _lastAppliedInputs.TryGetValue(id, out FrameInput last);
-                string pos = _batchStates.Length > i ? _batchStates[i].Position.ToString() : "?";
+                string pos = _renderStates.Length > i ? _renderStates[i].Position.ToString() : "?";
                 sb.Append($"玩家#{id} active={_session.IsActive(id)} pos={pos} " +
-                          $"最近输入=(mx={last.MoveX},my={last.MoveY},btn={last.Buttons},tick={last.Tick}) " +
                           $"确认水位={_session.LatestConfirmedTick(id)} | ");
             }
-            _debugLogUntil = Time.time + 5f;
             return sb.ToString();
         }
 
@@ -107,6 +97,8 @@ namespace FaceSlapper.FrameSync
         {
             base.Awake();
             Instance = this;
+            _session.LogWarning = msg => Debug.LogWarning(msg);
+            _session.LogError = msg => Debug.LogError(msg);
             EventBus.Subscribe<LocalInputEvent>(OnLocalInput);
         }
 
@@ -280,7 +272,7 @@ namespace FaceSlapper.FrameSync
             // 可靠有序通道保证此前的输入先于本消息到达各端。
             int effectiveTick = _relay.ServerMarkLeft(clientId);
 
-            // 销毁对象仅影响视觉（模拟状态权威数据在管理器数组中，与对象存活无关）。
+            // 销毁对象仅影响视觉（模拟状态权威数据在会话数组中，与对象存活无关）。
             FrameSyncMovement e = FindEntity(clientId);
             if (e != null) Net.Server.Despawn(e.NetObject);
 
@@ -296,7 +288,6 @@ namespace FaceSlapper.FrameSync
             _seed = seed;
             _roster = ParseInts(rosterCsv);
             _pendingSpawnRaw = ParseInts(positionsCsv);
-            _session.BeginSession(_roster, FrameSyncConfig.InputDelayTicks);
 
             IsRunning = false;
             _pendingStart = true; // 等待所有玩家对象在本端生成完毕（见 TryBeginSimulation）
@@ -315,7 +306,8 @@ namespace FaceSlapper.FrameSync
         [NetRpc]
         private void RpcInput(int clientId, int tick, int moveX, int moveY, int buttons)
         {
-            // 只有经服务器广播回来的输入才进入确认存储（输入封存）。
+            // 只有经服务器广播回来的输入才进入确认存储（输入封存）；
+            // 若该 tick 已被预测消费且不一致，会话层自动安排回滚。
             _session.OnConfirmedInput(new FrameInput
             {
                 Tick = tick,
@@ -335,7 +327,7 @@ namespace FaceSlapper.FrameSync
 
             float dt = Time.deltaTime;
 
-            // 本地输入采集（30Hz 节拍，与模拟推进解耦：停帧等待期间仍持续采集上行）。
+            // 本地输入采集（30Hz 节拍，与模拟推进解耦）。
             _inputAccumulator += dt;
             while (_inputAccumulator >= FrameSyncConfig.TickSeconds)
             {
@@ -343,28 +335,27 @@ namespace FaceSlapper.FrameSync
                 SampleAndSendLocalInput();
             }
 
-            // 模拟推进：集齐全员确认输入才走 tick，否则停帧等待（lockstep 语义）。
+            // 模拟推进：乐观预测——缺确认输入时按预测推进，不回填等待；
+            // 仅当预测窗口已满或本地输入未采样时停帧。
             _simAccumulator += dt;
             const int maxStepsPerFrame = 5; // 追帧上限，防止卡顿后死亡螺旋
             int steps = 0;
             while (_simAccumulator >= FrameSyncConfig.TickSeconds && steps < maxStepsPerFrame)
             {
-                // 成员移除在当前 tick 边界统一生效。
-                _session.ApplyRemovals(_simTick);
-
-                if (!_session.HasAllInputsFor(_simTick))
+                if (!_session.TryAdvance(out bool stalled))
                 {
                     if (!_stallLogged)
                     {
                         _stallLogged = true;
-                        Debug.LogWarning($"[FrameSync] 等待输入，停帧于 tick {_simTick}");
+                        Debug.LogWarning($"[FrameSync] 停帧于 tick {_session.SimTick}（{_session.LastStallReason}）");
                     }
                     _simAccumulator = Mathf.Min(_simAccumulator, FrameSyncConfig.TickSeconds);
                     break;
                 }
                 _stallLogged = false;
                 _simAccumulator -= FrameSyncConfig.TickSeconds;
-                StepSimulation();
+                PushStatesToEntities();
+                ReportConfirmedHashes();
                 steps++;
             }
             if (steps >= maxStepsPerFrame) _simAccumulator = 0f;
@@ -375,7 +366,7 @@ namespace FaceSlapper.FrameSync
             int localId = Net.LocalClientId;
             int tick = _localInputTick + FrameSyncConfig.InputDelayTicks;
             _localInputTick++;
-            if (!_session.IsActive(localId)) return; // 观战/非会话成员不上行
+            if (!_session.InSession || !_session.IsActive(localId)) return; // 观战/非会话成员不上行
 
             InputSnapshot snap = default;
             if (GameManager.HasInstance)
@@ -388,63 +379,38 @@ namespace FaceSlapper.FrameSync
             if (snap.SpeedUpHeld) buttons |= (int)FrameButtons.SpeedUp;
             _pendingButtons = 0;
 
-            // 只上行，不入本地模拟：待服务器广播回来后成为确认输入（输入封存）。
-            SendServerRpc(nameof(CmdInput), tick,
-                InputQuantizer.Quantize(snap.MoveAxis.x),
-                InputQuantizer.Quantize(snap.MoveAxis.y),
-                buttons);
+            var fi = new FrameInput
+            {
+                Tick = tick,
+                ClientId = localId,
+                MoveX = InputQuantizer.Quantize(snap.MoveAxis.x),
+                MoveY = InputQuantizer.Quantize(snap.MoveAxis.y),
+                Buttons = buttons,
+            };
+
+            SendServerRpc(nameof(CmdInput), tick, fi.MoveX, fi.MoveY, buttons);
+            _session.SetLocalInput(fi); // 本地自预测来源（输入封存：模拟仍以服务器确认版本为准）
         }
 
-        private void StepSimulation()
+        /// <summary>把会话权威状态写回实体（仅驱动渲染插值；对象已销毁不影响逻辑）。</summary>
+        private void PushStatesToEntities()
         {
-            // 收集：roster 下标对齐的输入/活跃标记（状态数组跨 tick 延续，是权威数据）。
-            bool debugLog = Time.time < _debugLogUntil;
-            int count = _roster.Length;
-            for (int i = 0; i < count; i++)
-            {
-                int id = _roster[i];
-                bool active = _session.IsActive(id);
-                _batchActive[i] = active;
-                if (!active) continue;
-
-                FrameInput input = _session.GetInput(id, _simTick);
-                _batchInputs[i] = input;
-                _lastAppliedInputs[id] = input;
-                if (debugLog)
-                    Debug.Log($"[FrameSync] tick={_simTick} 玩家#{id} 消费确认输入: " +
-                              $"mx={input.MoveX} my={input.MoveY} btn={input.Buttons}");
-            }
-
-            // 模拟：移动 → 圆形碰撞 → 击飞判定 → 攻击判定（与离线自测共用同一代码路径）。
-            FrameSyncSim.SimulateAll(_batchStates, _batchInputs, _batchActive, count);
-            FrameSyncSim.ResolveCollisions(_batchStates, _batchActive, count);
-            FrameSyncSim.ResolveHitback(_batchStates, _batchInputs, _batchActive, count);
-            FrameSyncSim.ResolveAttack(_batchStates, _batchInputs, _batchActive, count);
-
-            // 写回实体（仅驱动渲染插值；对象已销毁不影响逻辑）。
-            for (int i = 0; i < count; i++)
-                if (_batchActive[i] && _rosterEntities[i] != null)
-                    _rosterEntities[i].ApplyTickResult(_batchStates[i]);
-
-            _session.ConsumeTick(_simTick);
-            _simTick++;
-
-            // 周期性上报状态哈希（不同步检测）。
-            if (_simTick % FrameSyncConfig.HashIntervalTicks == 0)
-                SendServerRpc(nameof(CmdStateHash), _simTick, ComputeLocalHash());
+            _session.CopyStates(_renderStates);
+            for (int i = 0; i < _rosterEntities.Length; i++)
+                if (_rosterEntities[i] != null)
+                    _rosterEntities[i].ApplyTickResult(_renderStates[i]);
         }
 
-        private int ComputeLocalHash()
+        /// <summary>上报确认水位线内的状态哈希（预测 tick 各端天然不同，不上报）。</summary>
+        private void ReportConfirmedHashes()
         {
-            uint h = 2166136261u;
-            for (int i = 0; i < _roster.Length; i++)
+            while (_nextHashReport <= _session.SimTick)
             {
-                int id = _roster[i];
-                if (!_session.IsActive(id)) continue;
-                h = FrameSyncSim.Mix(h, id);
-                h = FrameSyncSim.MixState(h, _batchStates[i]);
+                if (!_session.TryGetStateHash(_nextHashReport, out int hash))
+                    break; // 水位线未到，等待确认
+                SendServerRpc(nameof(CmdStateHash), _nextHashReport, hash);
+                _nextHashReport += FrameSyncConfig.HashIntervalTicks;
             }
-            return (int)h;
         }
 
         // ---------------- 开局等待与重置 ----------------
@@ -462,16 +428,14 @@ namespace FaceSlapper.FrameSync
             for (int i = 0; i < _roster.Length; i++)
                 if (FindEntity(_roster[i]) == null) return;
 
-            // 批处理缓冲按 roster 下标对齐分配。
             int count = _roster.Length;
             _rosterEntities = new FrameSyncMovement[count];
-            _batchStates = new PlayerSimState[count];
-            _batchInputs = new FrameInput[count];
-            _batchActive = new bool[count];
+            _renderStates = new PlayerSimState[count];
 
+            var initialStates = new PlayerSimState[count];
             for (int i = 0; i < count; i++)
             {
-                var state = new PlayerSimState
+                initialStates[i] = new PlayerSimState
                 {
                     Position = new FPVec3(
                         FP.FromRaw(_pendingSpawnRaw[i * 3]),
@@ -481,23 +445,23 @@ namespace FaceSlapper.FrameSync
                     VelY = FP.Zero,
                     Grounded = true,
                 };
-                _batchStates[i] = state; // 权威状态（跨 tick 延续）
 
                 FrameSyncMovement e = FindEntity(_roster[i]);
-                e.InitSimState(state);   // 渲染载体初始姿态
+                e.InitSimState(initialStates[i]);   // 渲染载体初始姿态
                 _rosterEntities[i] = e;
             }
 
-            _simTick = 0;
+            _session.Begin(_roster, Net.LocalClientId, initialStates, FrameSyncConfig.InputDelayTicks);
+
             _localInputTick = 0;
             _simAccumulator = 0f;
             _inputAccumulator = 0f;
             _pendingButtons = 0;
             _stallLogged = false;
-            _lastAppliedInputs.Clear();
+            _nextHashReport = FrameSyncConfig.HashIntervalTicks;
             _pendingStart = false;
             IsRunning = true;
-            Debug.Log($"[FrameSync] 模拟开始: {_roster.Length} 名玩家, seed={_seed}");
+            Debug.Log($"[FrameSync] 模拟开始（乐观预测）: {_roster.Length} 名玩家, seed={_seed}");
         }
 
         private void ResetLocal()
@@ -506,14 +470,13 @@ namespace FaceSlapper.FrameSync
             _pendingStart = false;
             _roster = new int[0];
             _pendingSpawnRaw = new int[0];
-            _session.EndSession();
-            _simTick = 0;
+            _session.End();
             _localInputTick = 0;
             _simAccumulator = 0f;
             _inputAccumulator = 0f;
             _pendingButtons = 0;
             _stallLogged = false;
-            _lastAppliedInputs.Clear();
+            _nextHashReport = 0;
         }
 
         // ---------------- 工具 ----------------

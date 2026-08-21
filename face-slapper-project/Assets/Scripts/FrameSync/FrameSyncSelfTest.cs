@@ -23,6 +23,7 @@ namespace FaceSlapper.FrameSync
             if (!RunHitbackCheck()) return false;
             if (!RunAttackCheck()) return false;
             if (!RunProtocolCheck()) return false;
+            if (!RunSessionCheck()) return false;
 
             FrameInput[][] scripted = GenerateScriptedInputs(ticks);
 
@@ -231,10 +232,11 @@ namespace FaceSlapper.FrameSync
         public static bool RunProtocolCheck()
         {
             int[] roster = { 0, 1 };
+            const int delay = 2; // 协议层通用性测试：显式使用 2 tick 输入延迟窗口
 
             // ---- 1) 服务器转发校验 ----
             var server = new FrameSyncProtocol();
-            server.ServerInitRoster(roster, FrameSyncConfig.InputDelayTicks);
+            server.ServerInitRoster(roster, delay);
             bool sequenceRules =
                 server.ServerTryRelay(0, 2) &&   // 首条合法（首个真实 tick = InputDelayTicks）
                 !server.ServerTryRelay(0, 2) &&  // 重复拒绝（首提优先）
@@ -271,7 +273,7 @@ namespace FaceSlapper.FrameSync
 
             // 端 A：每收到一条消息就尽力推进（模拟网络较好的端）。
             var endA = new FrameSyncProtocol();
-            endA.BeginSession(roster, FrameSyncConfig.InputDelayTicks);
+            endA.BeginSession(roster, delay);
             PlayerSimState[] statesA = CreateInitialStates();
             var inputBuf = new FrameInput[PlayerCount];
             var activeBuf = new bool[PlayerCount];
@@ -284,7 +286,7 @@ namespace FaceSlapper.FrameSync
 
             // 端 B：收完全部消息后一次性推进（模拟网络较差/卡顿的端）。
             var endB = new FrameSyncProtocol();
-            endB.BeginSession(roster, FrameSyncConfig.InputDelayTicks);
+            endB.BeginSession(roster, delay);
             PlayerSimState[] statesB = CreateInitialStates();
             foreach (Broadcast msg in stream) msg.ApplyTo(endB);
             int tickB = StepWhilePossible(endB, statesB, inputBuf, activeBuf, 0);
@@ -300,7 +302,7 @@ namespace FaceSlapper.FrameSync
 
             // ---- 3) 停帧语义：缺少 p0 的 tick 7 时必须停在 tick 7 ----
             var endC = new FrameSyncProtocol();
-            endC.BeginSession(roster, FrameSyncConfig.InputDelayTicks);
+            endC.BeginSession(roster, delay);
             PlayerSimState[] statesC = CreateInitialStates();
             for (int i = 0; i < stream.Count - 1; i++) stream[i].ApplyTo(endC); // 去掉最后一条
             int tickC = StepWhilePossible(endC, statesC, inputBuf, activeBuf, 0);
@@ -311,6 +313,139 @@ namespace FaceSlapper.FrameSync
             }
 
             Debug.Log("[FrameSyncTest] 协议自检通过：转发校验/异步推进一致性/停帧语义均符合预期");
+            return true;
+        }
+
+        /// <summary>
+        /// 乐观会话（预测 + 回滚）回归测试：
+        /// 1) 预测正确——确认输入及时到达且与预测一致时零回滚；
+        /// 2) 回滚收敛——远端输入迟到触发回滚重放后，最终状态与"全程消费真实输入的
+        ///    保守参考模拟"逐位一致；
+        /// 3) 窗口溢出——远端输入长期缺失时预测推进到上限后停帧（退化保守 lockstep），
+        ///    不崩溃不死锁。
+        /// </summary>
+        public static bool RunSessionCheck()
+        {
+            int[] roster = { 0, 1 };
+            const int Ticks = 20;
+
+            // ---- 1) 预测正确零回滚 ----
+            {
+                var s = new FrameSyncSession();
+                s.Begin(roster, 0, CreateInitialStates(), 0);
+                for (int t = 0; t < 30; t++)
+                {
+                    var local = new FrameInput { Tick = t, ClientId = 0, MoveX = 10 };
+                    s.SetLocalInput(local);
+                    s.OnConfirmedInput(local); // 本地确认即时回到
+                    s.OnConfirmedInput(new FrameInput { Tick = t, ClientId = 1, MoveY = 20 });
+                    if (!s.TryAdvance(out bool stalled))
+                    {
+                        Debug.LogError($"[FrameSyncTest] 会话自检失败（零回滚）：tick={t} 意外停帧（{s.LastStallReason}）");
+                        return false;
+                    }
+                }
+                if (s.RollbackCount != 0 || s.SimTick != 30 || s.ConfirmedWaterline != 29)
+                {
+                    Debug.LogError($"[FrameSyncTest] 会话自检失败（零回滚）：rollback={s.RollbackCount} " +
+                                   $"simTick={s.SimTick} waterline={s.ConfirmedWaterline}");
+                    return false;
+                }
+            }
+
+            // ---- 2) 回滚收敛：迟到输入 → 回滚重放后与保守参考一致 ----
+            {
+                // 真实输入流（p1 刻意多变：换向 + 跳跃）。
+                var p0 = new FrameInput[Ticks];
+                var p1 = new FrameInput[Ticks];
+                for (int t = 0; t < Ticks; t++)
+                {
+                    p0[t] = new FrameInput { Tick = t, ClientId = 0, MoveX = 10 };
+                    p1[t] = new FrameInput
+                    {
+                        Tick = t,
+                        ClientId = 1,
+                        MoveX = t < 5 ? 32 : -32,
+                        Buttons = t == 7 ? (int)FrameButtons.Jump : 0,
+                    };
+                }
+
+                var s = new FrameSyncSession();
+                s.Begin(roster, 0, CreateInitialStates(), 0);
+
+                // 前 10 tick：p0 即时确认，p1 全部缺失（预测为静止）。
+                for (int t = 0; t < 10; t++)
+                {
+                    s.SetLocalInput(p0[t]);
+                    s.OnConfirmedInput(p0[t]);
+                    if (!s.TryAdvance(out _))
+                    {
+                        Debug.LogError($"[FrameSyncTest] 会话自检失败（回滚收敛）：tick={t} 意外停帧（{s.LastStallReason}）");
+                        return false;
+                    }
+                }
+                // p1 的 0..9 迟到且与预测不同 → 触发回滚。
+                for (int t = 0; t < 10; t++) s.OnConfirmedInput(p1[t]);
+
+                // 后 10 tick：双方即时确认。
+                for (int t = 10; t < Ticks; t++)
+                {
+                    s.SetLocalInput(p0[t]);
+                    s.OnConfirmedInput(p0[t]);
+                    s.OnConfirmedInput(p1[t]);
+                    if (!s.TryAdvance(out _))
+                    {
+                        Debug.LogError($"[FrameSyncTest] 会话自检失败（回滚收敛）：tick={t} 意外停帧（{s.LastStallReason}）");
+                        return false;
+                    }
+                }
+
+                // 保守参考：直接消费真实输入流。
+                PlayerSimState[] refStates = CreateInitialStates();
+                var refInputs = new FrameInput[PlayerCount];
+                for (int t = 0; t < Ticks; t++)
+                {
+                    refInputs[0] = p0[t];
+                    refInputs[1] = p1[t];
+                    Step(refStates, refInputs);
+                }
+
+                var sessionStates = new PlayerSimState[PlayerCount];
+                s.CopyStates(sessionStates);
+                uint hashSession = HashAll(sessionStates);
+                uint hashRef = HashAll(refStates);
+                if (s.RollbackCount < 1 || s.SimTick != Ticks || hashSession != hashRef)
+                {
+                    Debug.LogError($"[FrameSyncTest] 会话自检失败（回滚收敛）：rollback={s.RollbackCount} " +
+                                   $"simTick={s.SimTick} hashSession={hashSession} hashRef={hashRef}");
+                    return false;
+                }
+            }
+
+            // ---- 3) 窗口溢出停帧 ----
+            {
+                var s = new FrameSyncSession();
+                s.Begin(roster, 0, CreateInitialStates(), 0);
+                int advanced = 0;
+                for (int t = 0; t < 100; t++)
+                {
+                    var local = new FrameInput { Tick = t, ClientId = 0, MoveX = 5 };
+                    s.SetLocalInput(local);
+                    s.OnConfirmedInput(local); // 只有本地确认，远端长期缺失
+                    if (s.TryAdvance(out _)) advanced++;
+                    else break;
+                }
+                // 水位线卡在 -1（p1 无任何确认），允许推进 tick 0..31，共 32 个。
+                if (advanced != FrameSyncSession.MaxPredictionTicks || s.SimTick != FrameSyncSession.MaxPredictionTicks
+                    || s.RollbackCount != 0)
+                {
+                    Debug.LogError($"[FrameSyncTest] 会话自检失败（窗口溢出）：advanced={advanced} " +
+                                   $"simTick={s.SimTick} rollback={s.RollbackCount}（期望 {FrameSyncSession.MaxPredictionTicks}）");
+                    return false;
+                }
+            }
+
+            Debug.Log("[FrameSyncTest] 会话自检通过：零回滚/回滚收敛/窗口溢出停帧均符合预期");
             return true;
         }
 

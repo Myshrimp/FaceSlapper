@@ -8,8 +8,11 @@ namespace FaceSlapper.FrameSync
         /// <summary>逻辑帧率（Hz）。</summary>
         public const int TickRate = 30;
 
-        /// <summary>输入延迟（tick 数）：本地输入在 InputDelayTicks 之后才生效，用于掩盖网络延迟。</summary>
-        public const int InputDelayTicks = 2;
+        /// <summary>
+        /// 输入延迟（tick 数）。乐观预测模式下为 0：本地输入采样后立即上行并当帧自预测生效，
+        /// 远端延迟由预测 + 回滚掩盖。协议层仍保留延迟参数，供离线测试使用。
+        /// </summary>
+        public const int InputDelayTicks = 0;
 
         /// <summary>状态哈希校验间隔（tick 数）。</summary>
         public const int HashIntervalTicks = 60;
