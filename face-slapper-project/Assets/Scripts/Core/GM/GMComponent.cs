@@ -110,6 +110,39 @@ namespace FaceSlapper.Core
             return Match.MatchInfo();
         }
 
+        /// <summary>开始帧同步会话（lockstep，为所有已连接玩家生成 PlayerFrameSync）。用法: StartFrameSync</summary>
+        public string StartFrameSync()
+        {
+            var mgr = Object.FindObjectOfType<FrameSync.FrameSyncManager>();
+            if (mgr == null) return "失败：场景中找不到 FrameSyncManager（请先运行菜单 FaceSlapper/Setup FrameSync）";
+            mgr.RequestStartFrameSync();
+            return "帧同步会话开始指令已发送";
+        }
+
+        /// <summary>结束帧同步会话并销毁帧同步玩家。用法: StopFrameSync</summary>
+        public string StopFrameSync()
+        {
+            var mgr = Object.FindObjectOfType<FrameSync.FrameSyncManager>();
+            if (mgr == null) return "失败：场景中找不到 FrameSyncManager（请先运行菜单 FaceSlapper/Setup FrameSync）";
+            mgr.RequestStopFrameSync();
+            return "帧同步会话结束指令已发送";
+        }
+
+        /// <summary>运行帧同步确定性自检（1800 tick 双实例哈希比对）。用法: FrameSyncTest</summary>
+        public string FrameSyncTest()
+        {
+            bool ok = FrameSync.FrameSyncSelfTest.RunDeterminismCheck();
+            return ok ? "帧同步确定性自检通过（详见 Console）" : "帧同步确定性自检失败（详见 Console 错误日志）";
+        }
+
+        /// <summary>帧同步诊断：打印实体/输入映射快照，并开启 5 秒逐 tick 输入日志。用法: FrameSyncDebug</summary>
+        public string FrameSyncDebug()
+        {
+            var mgr = Object.FindObjectOfType<FrameSync.FrameSyncManager>();
+            if (mgr == null) return "失败：场景中找不到 FrameSyncManager";
+            return mgr.DumpDebugState();
+        }
+
         /// <summary>写一条日志。用法: Log hello</summary>
         public string Log(string msg)
         {

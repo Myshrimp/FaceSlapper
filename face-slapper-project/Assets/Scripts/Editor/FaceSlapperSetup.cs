@@ -1,5 +1,6 @@
 using FaceSlapper.Battle;
 using FaceSlapper.Core;
+using FaceSlapper.FrameSync;
 using FaceSlapper.Match;
 using FaceSlapper.Networking;
 using FaceSlapper.Room;
@@ -36,9 +37,11 @@ namespace FaceSlapper.EditorTools
 
             GameObject playerPrefab = CreatePlayerPrefab();
             GameObject weaponPrefab = CreateWeaponPrefab();
+            GameObject frameSyncPrefab = CreatePlayerFrameSyncPrefab();
             Net.Backend.EditorRegisterSpawnablePrefab(playerPrefab);
             Net.Backend.EditorRegisterSpawnablePrefab(weaponPrefab);
-            CreateMainScene(playerPrefab, weaponPrefab);
+            Net.Backend.EditorRegisterSpawnablePrefab(frameSyncPrefab);
+            CreateMainScene(playerPrefab, weaponPrefab, frameSyncPrefab);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -52,10 +55,43 @@ namespace FaceSlapper.EditorTools
             EnsureFolders();
             GameObject playerPrefab = CreatePlayerPrefab();
             GameObject weaponPrefab = CreateWeaponPrefab();
+            GameObject frameSyncPrefab = CreatePlayerFrameSyncPrefab();
             Net.Backend.EditorRegisterSpawnablePrefab(playerPrefab);
             Net.Backend.EditorRegisterSpawnablePrefab(weaponPrefab);
+            Net.Backend.EditorRegisterSpawnablePrefab(frameSyncPrefab);
             AssetDatabase.SaveAssets();
             Debug.Log("[FaceSlapper] Prefab 已生成并注册。");
+        }
+
+        /// <summary>
+        /// 帧同步增量搭建：生成 PlayerFrameSync.prefab、注册可生成对象、
+        /// 并给现有 Main 场景的 Room 物体挂载 FrameSyncManager（不重建场景）。
+        /// 菜单: FaceSlapper/Setup FrameSync
+        /// </summary>
+        [MenuItem("FaceSlapper/Setup FrameSync", priority = 2)]
+        public static void SetupFrameSync()
+        {
+            EnsureFolders();
+            FaceSlapperArtSetup.EnsureArtAssets();
+
+            GameObject frameSyncPrefab = CreatePlayerFrameSyncPrefab();
+            Net.Backend.EditorRegisterSpawnablePrefab(frameSyncPrefab);
+            EnsureFrameSyncManagerInScene(frameSyncPrefab);
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[FaceSlapper] 帧同步搭建完成！进入 Main 场景 Play，` 打开 GM 命令行：" +
+                      "Host() 开房、另一实例 Join(ip)，然后 StartFrameSync() 开始帧同步会话。");
+        }
+
+        /// <summary>帧同步确定性自检（纯逻辑，无场景依赖）。菜单: FaceSlapper/FrameSync SelfTest</summary>
+        [MenuItem("FaceSlapper/FrameSync SelfTest", priority = 3)]
+        public static void RunFrameSyncSelfTest()
+        {
+            bool ok = FrameSyncSelfTest.RunDeterminismCheck();
+            Debug.Log(ok
+                ? "[FaceSlapper] 帧同步确定性自检通过。"
+                : "[FaceSlapper] 帧同步确定性自检失败，详见上方错误日志。");
         }
 
         // ---------------- Prefab ----------------
@@ -230,9 +266,85 @@ namespace FaceSlapper.EditorTools
             }
         }
 
+        /// <summary>
+        /// 帧同步玩家 Prefab：视觉与 Player.prefab 一致，但不依赖物理模拟——
+        /// 刚体设为运动学全冻结、碰撞体为 trigger（仅供未来命中查询），
+        /// 移动由 FrameSyncMovement（定点数确定性模拟）+ FrameSyncRender（渲染插值）驱动。
+        /// </summary>
+        private static GameObject CreatePlayerFrameSyncPrefab()
+        {
+            var root = new GameObject("PlayerFrameSync");
+            try
+            {
+                Rigidbody rb = root.AddComponent<Rigidbody>();
+                rb.isKinematic = true;
+                rb.constraints = RigidbodyConstraints.FreezeAll;
+                rb.interpolation = RigidbodyInterpolation.Interpolate;
+
+                // 球形碰撞体（trigger：不参与物理解算，位置由确定性模拟写入）。
+                var collider = root.AddComponent<SphereCollider>();
+                collider.isTrigger = true;
+                collider.center = new Vector3(0f, 0.6f, 0f);
+                collider.radius = 0.6f;
+
+                Material bodyMat = AssetDatabase.LoadAssetAtPath<Material>(FaceSlapperArtSetup.BodyMatPath);
+                Material eyeMat = AssetDatabase.LoadAssetAtPath<Material>(FaceSlapperArtSetup.DotEyeMatPath);
+                Material handMat = AssetDatabase.LoadAssetAtPath<Material>(FaceSlapperArtSetup.HandMatPath);
+
+                // 身体（球）。
+                GameObject body = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                body.name = "Body";
+                Object.DestroyImmediate(body.GetComponent<Collider>());
+                body.transform.SetParent(root.transform, false);
+                body.transform.localPosition = new Vector3(0f, 0.6f, 0f);
+                body.transform.localScale = new Vector3(1.2f, 1.2f, 1.2f);
+                body.GetComponent<Renderer>().sharedMaterial = bodyMat;
+
+                // 眼睛（贴花豆豆眼）。
+                Vector3 sphereCenter = new Vector3(0f, 0.6f, 0f);
+                CreateEye(root.transform, "EyeL", new Vector3(-0.13f, 0.72f, 0.575f), sphereCenter, eyeMat);
+                CreateEye(root.transform, "EyeR", new Vector3(0.13f, 0.72f, 0.575f), sphereCenter, eyeMat);
+
+                // 两侧手掌。
+                var hands = new GameObject("Hands");
+                hands.transform.SetParent(root.transform, false);
+                var tintRenderers = new System.Collections.Generic.List<Renderer>
+                {
+                    body.GetComponent<Renderer>(),
+                };
+                BuildHand(hands.transform, "HandR", new Vector3(0.70f, 0.55f, 0.05f),
+                    FaceSlapperArtSetup.HandRelaxedRPath, FaceSlapperArtSetup.HandGripRPath, handMat, tintRenderers);
+                BuildHand(hands.transform, "HandL", new Vector3(-0.70f, 0.55f, 0.05f),
+                    FaceSlapperArtSetup.HandRelaxedLPath, FaceSlapperArtSetup.HandGripLPath, handMat, tintRenderers);
+
+                // 武器挂点（右手掌心，供后续帧同步武器使用）。
+                var socket = new GameObject("HandSocket");
+                socket.transform.SetParent(root.transform, false);
+                socket.transform.localPosition = new Vector3(0.70f, 0.55f, 0.12f);
+
+                // 身份染色 + 帧同步组件（FrameSyncMovement 会带上 NetObject）。
+                var identity = root.AddComponent<NetworkIdentity>();
+                SetRendererArray(identity, "_tintRenderers", tintRenderers);
+                root.AddComponent<FrameSyncMovement>();
+                root.AddComponent<FrameSyncRender>();
+
+                // 后端专属组件（NetworkObject/桥接等）。
+                Net.Backend.EditorEnsurePrefabComponents(root);
+
+                string path = PrefabDir + "/PlayerFrameSync.prefab";
+                GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log($"[FaceSlapper] 帧同步玩家 Prefab: {path}");
+                return prefab;
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
         // ---------------- 场景 ----------------
 
-        private static void CreateMainScene(GameObject playerPrefab, GameObject weaponPrefab)
+        private static void CreateMainScene(GameObject playerPrefab, GameObject weaponPrefab, GameObject frameSyncPrefab)
         {
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -247,9 +359,11 @@ namespace FaceSlapper.EditorTools
             var roomGo = new GameObject("Room");
             var room = roomGo.AddComponent<RoomComponent>();
             roomGo.AddComponent<MatchComponent>();
+            var frameSync = roomGo.AddComponent<FrameSyncManager>();
             Net.Backend.EditorEnsurePrefabComponents(roomGo);
             SetObjectReference(room, "_playerPrefab", playerPrefab.GetComponent<NetObject>());
             SetObjectReference(room, "_weaponPrefab", weaponPrefab.GetComponent<NetObject>());
+            SetObjectReference(frameSync, "_playerPrefab", frameSyncPrefab.GetComponent<NetObject>());
 
             CreateArena();
             CreateSpawnPoints();
@@ -259,6 +373,30 @@ namespace FaceSlapper.EditorTools
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             Debug.Log($"[FaceSlapper] 场景已保存: {ScenePath}");
+        }
+
+        /// <summary>给现有 Main 场景的 Room 物体挂载 FrameSyncManager 并绑定 Prefab（增量，不重建场景）。</summary>
+        private static void EnsureFrameSyncManagerInScene(GameObject frameSyncPrefab)
+        {
+            Scene scene = EditorSceneManager.OpenScene(ScenePath);
+            GameObject roomGo = null;
+            foreach (GameObject go in scene.GetRootGameObjects())
+            {
+                if (go.name == "Room") { roomGo = go; break; }
+            }
+            if (roomGo == null)
+            {
+                Debug.LogWarning("[FaceSlapper] 场景中未找到 Room 物体，请先运行 FaceSlapper/Setup All。");
+                return;
+            }
+
+            var frameSync = roomGo.GetComponent<FrameSyncManager>();
+            if (frameSync == null) frameSync = roomGo.AddComponent<FrameSyncManager>();
+            SetObjectReference(frameSync, "_playerPrefab", frameSyncPrefab.GetComponent<NetObject>());
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log("[FaceSlapper] FrameSyncManager 已挂载到场景 Room 物体。");
         }
 
         private static void CreateArena()
