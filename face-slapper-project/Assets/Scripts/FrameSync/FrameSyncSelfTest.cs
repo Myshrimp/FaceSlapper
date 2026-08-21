@@ -21,6 +21,7 @@ namespace FaceSlapper.FrameSync
         {
             if (!RunCollisionCheck()) return false;
             if (!RunHitbackCheck()) return false;
+            if (!RunAttackCheck()) return false;
             if (!RunProtocolCheck()) return false;
 
             FrameInput[][] scripted = GenerateScriptedInputs(ticks);
@@ -163,6 +164,64 @@ namespace FaceSlapper.FrameSync
         }
 
         /// <summary>
+        /// 攻击（巴掌）回归测试：攻击者面向 +X、受害者位于身前 2 米（判定圈内）时被击退
+        /// （水平击退速度 > 0、离地、攻击冷却与挥击表现生效、冷却期内二次攻击被拒绝）；
+        /// 6 米外的旁观者不受影响。
+        /// </summary>
+        public static bool RunAttackCheck()
+        {
+            var states = new PlayerSimState[3];
+            states[0] = new PlayerSimState
+            {
+                Position = FPVec3.Zero,
+                Facing = new FPVec2(FP.One, FP.Zero),
+                Grounded = true,
+            };
+            states[1] = new PlayerSimState
+            {
+                Position = new FPVec3(FP.FromInt(2), FP.Zero, FP.Zero), // 身前 2m（判定点 1.2 + 半径 2.0 内）
+                Facing = new FPVec2(FP.Zero, FP.One),
+                Grounded = true,
+            };
+            states[2] = new PlayerSimState
+            {
+                Position = new FPVec3(FP.FromInt(6), FP.Zero, FP.Zero), // 6m 外旁观
+                Facing = new FPVec2(FP.Zero, FP.One),
+                Grounded = true,
+            };
+
+            var inputs = new FrameInput[3];
+            inputs[0] = new FrameInput { Buttons = (int)FrameButtons.Attack };
+            var active = new[] { true, true, true };
+
+            FrameSyncSim.ResolveAttack(states, inputs, active, 3);
+
+            bool victimKnocked = states[1].KnockVel.X.Raw > 0 && states[1].VelY.Raw > 0
+                                 && !states[1].Grounded && states[1].KnockTicks > 0;
+            bool cooldownSet = states[0].AttackCooldownTicks > 0;
+            bool swingStarted = states[0].SwingTicks == FrameSyncSim.SwingTotalTicks;
+            bool bystanderSafe = states[2].KnockVel.SqrMagnitude.Raw == 0 && states[2].Grounded;
+
+            // 冷却期内的第二次攻击：不应改变受害者状态、不重置挥击表现。
+            PlayerSimState snapshot = states[1];
+            states[0].SwingTicks = 0; // 模拟挥动已结束，便于验证冷却拒绝是否重新触发挥击
+            FrameSyncSim.ResolveAttack(states, inputs, active, 3);
+            bool cooldownBlocks = states[1].KnockVel.X.Raw == snapshot.KnockVel.X.Raw
+                                  && states[1].VelY.Raw == snapshot.VelY.Raw
+                                  && states[0].SwingTicks == 0;
+
+            if (!victimKnocked || !cooldownSet || !swingStarted || !bystanderSafe || !cooldownBlocks)
+            {
+                Debug.LogError($"[FrameSyncTest] 攻击自检失败：victimKnocked={victimKnocked} " +
+                               $"cooldownSet={cooldownSet} swingStarted={swingStarted} " +
+                               $"bystanderSafe={bystanderSafe} cooldownBlocks={cooldownBlocks}");
+                return false;
+            }
+            Debug.Log("[FrameSyncTest] 攻击自检通过：命中击退/冷却/挥击表现/旁观者豁免均符合预期");
+            return true;
+        }
+
+        /// <summary>
         /// 协议层回归测试：
         /// 1) 服务器转发校验——首提优先（重复拒绝）、严格连续（跳号拒绝）、非成员/掉线拒收；
         /// 2) 异步推进一致性——两端消费同一确认输入流 + 掉线按生效 tick 移除，
@@ -294,6 +353,7 @@ namespace FaceSlapper.FrameSync
                 FrameSyncSim.SimulateAll(states, inputBuf, activeBuf, roster.Length);
                 FrameSyncSim.ResolveCollisions(states, activeBuf, roster.Length);
                 FrameSyncSim.ResolveHitback(states, inputBuf, activeBuf, roster.Length);
+                FrameSyncSim.ResolveAttack(states, inputBuf, activeBuf, roster.Length);
                 proto.ConsumeTick(tick);
                 tick++;
             }
@@ -386,6 +446,7 @@ namespace FaceSlapper.FrameSync
             FrameSyncSim.SimulateAll(states, inputs, AllActive, n);
             FrameSyncSim.ResolveCollisions(states, AllActive, n);
             FrameSyncSim.ResolveHitback(states, inputs, AllActive, n);
+            FrameSyncSim.ResolveAttack(states, inputs, AllActive, n);
         }
 
         private static uint HashAll(PlayerSimState[] states)

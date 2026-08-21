@@ -11,9 +11,15 @@ namespace FaceSlapper.FrameSync
     {
         private FrameSyncMovement _sim;
 
+        // 挥击表现（纯渲染）：驱动模型上的 HandR 子节点，不参与模拟。
+        private Transform _handR;
+        private Quaternion _handRBaseLocalRot;
+
         private void Awake()
         {
             _sim = GetComponent<FrameSyncMovement>();
+            _handR = FindChildByName(transform, "HandR");
+            if (_handR != null) _handRBaseLocalRot = _handR.localRotation;
         }
 
         private void LateUpdate()
@@ -33,6 +39,35 @@ namespace FaceSlapper.FrameSync
                 float yaw = Mathf.Atan2(facing.X.ToFloat(), facing.Y.ToFloat()) * Mathf.Rad2Deg;
                 transform.rotation = Quaternion.Euler(0f, yaw, 0f);
             }
+
+            ApplySwing();
+        }
+
+        /// <summary>按模拟状态中的挥击倒计时驱动手臂摆动（对齐状态同步版 -80° 挥角）。</summary>
+        private void ApplySwing()
+        {
+            if (_handR == null) return;
+
+            int swing = _sim.State.SwingTicks;
+            if (swing <= 0)
+            {
+                _handR.localRotation = _handRBaseLocalRot;
+                return;
+            }
+            float progress = 1f - swing / (float)FrameSyncSim.SwingTotalTicks;
+            float angle = Mathf.Sin(progress * Mathf.PI) * -80f;
+            _handR.localRotation = _handRBaseLocalRot * Quaternion.Euler(angle, 0f, 0f);
+        }
+
+        private static Transform FindChildByName(Transform root, string name)
+        {
+            if (root.name == name) return root;
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform found = FindChildByName(root.GetChild(i), name);
+                if (found != null) return found;
+            }
+            return null;
         }
     }
 }

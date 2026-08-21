@@ -802,7 +802,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 395da8af7a98bcf43acac82c70e9fbbc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _playerPrefab: {fileID: 8568332587573572317, guid: b4a5037fd27967d439edf5ad8a4f4e1b,
+  _playerPrefab: {fileID: 454289510140660885, guid: b34a7fd84251c6f48b86d21a59c56c94,
     type: 3}
   _weaponPrefab: {fileID: 7229513600847585491, guid: 6edee513a7eb4f34b91de342db349b93,
     type: 3}

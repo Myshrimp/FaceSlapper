@@ -27,6 +27,14 @@ namespace FaceSlapper.FrameSync
         private const int HitbackCooldownTicks = 90;  // 3s * 30Hz
         private const int KnockRecoverTicks = 11;     // 0.35s * 30Hz ≈ 10.5，取 11
 
+        // 攻击/巴掌（对齐状态同步版 SlapperWeapon：身前 1.2m 判定、半径 1.4、力度 12、间隔 0.6s、挥动 0.22s）。
+        // 帧同步模式下玩家自带攻击，不依赖武器拾取。
+        private static readonly FP AttackRangeHalf = FP.FromRaw(12L * FP.ONE / 10); // 1.2
+        private static readonly FP AttackRadius = FP.FromRaw(14L * FP.ONE / 10);    // 1.4
+        private static readonly FP AttackForce = FP.FromInt(12);
+        private const int AttackCooldownTicks = 18;   // 0.6s * 30Hz
+        public const int SwingTotalTicks = 7;         // 0.22s * 30Hz ≈ 6.6，取 7（渲染层读取）
+
         // ---------------- 批处理入口（运行时已收集好的对齐数组，roster 顺序） ----------------
 
         /// <summary>逐玩家推进移动/跳跃/击退积分。states/inputs/active 按下标对齐。</summary>
@@ -79,13 +87,47 @@ namespace FaceSlapper.FrameSync
                     FP sqrDist = dx * dx + dz * dz;
                     if (sqrDist.Raw >= sqrHitDist.Raw) continue;
 
-                    ApplyKnockback(ref states[j], states[i]);
+                    ApplyKnockback(ref states[j], states[i], HitbackForce);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 攻击（巴掌）判定：攻击者按序处理；命中判定以"身前 RangeHalf 处为圆心、Radius+玩家半径为距"
+        /// 的圆形区域；同一 tick 多名攻击者命中同一目标时后序覆盖先序（确定性规则，与击飞一致）。
+        /// </summary>
+        public static void ResolveAttack(PlayerSimState[] states, FrameInput[] inputs, bool[] active, int count)
+        {
+            FP hitDist = AttackRadius + FrameSyncConfig.PlayerRadius;
+            FP sqrHitDist = hitDist * hitDist;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (!active[i] || !inputs[i].HasButton(FrameButtons.Attack)) continue;
+                if (states[i].AttackCooldownTicks > 0) continue;
+                states[i].AttackCooldownTicks = AttackCooldownTicks;
+                states[i].SwingTicks = SwingTotalTicks;
+
+                FPVec2 center = new FPVec2(
+                    states[i].Position.X + states[i].Facing.X * AttackRangeHalf,
+                    states[i].Position.Z + states[i].Facing.Y * AttackRangeHalf);
+
+                for (int j = 0; j < count; j++)
+                {
+                    if (j == i || !active[j]) continue;
+
+                    FP dx = states[j].Position.X - center.X;
+                    FP dz = states[j].Position.Z - center.Y;
+                    FP sqrDist = dx * dx + dz * dz;
+                    if (sqrDist.Raw >= sqrHitDist.Raw) continue;
+
+                    ApplyKnockback(ref states[j], states[i], AttackForce);
                 }
             }
         }
 
         /// <summary>对受害者施加击退：方向 = 攻击者→受害者（完全重合时用攻击者朝向），上挑比 0.5。</summary>
-        private static void ApplyKnockback(ref PlayerSimState victim, PlayerSimState attacker)
+        private static void ApplyKnockback(ref PlayerSimState victim, PlayerSimState attacker, FP force)
         {
             FP dx = victim.Position.X - attacker.Position.X;
             FP dz = victim.Position.Z - attacker.Position.Z;
@@ -100,7 +142,7 @@ namespace FaceSlapper.FrameSync
             }
 
             // 冲量 = (dir + up*0.5) 归一化 × 力度（等价于状态同步版的 ForceMode.VelocityChange）。
-            FP horizMag = HitbackForce / FP.Sqrt(FP.One + Quarter);
+            FP horizMag = force / FP.Sqrt(FP.One + Quarter);
             victim.KnockVel = dir * horizMag;
             victim.VelY = horizMag * Half;
             victim.KnockTicks = KnockRecoverTicks;
@@ -115,6 +157,8 @@ namespace FaceSlapper.FrameSync
             FP dt = FrameSyncConfig.TickDelta;
 
             if (s.CooldownTicks > 0) s.CooldownTicks--;
+            if (s.AttackCooldownTicks > 0) s.AttackCooldownTicks--;
+            if (s.SwingTicks > 0) s.SwingTicks--;
 
             // 水平移动（击退中操控力降为 30%，保留击退手感）。
             FPVec2 dir = input.MoveVector;
@@ -246,6 +290,8 @@ namespace FaceSlapper.FrameSync
             h = Mix(h, s.KnockVel.Y.Raw);
             h = Mix(h, s.KnockTicks);
             h = Mix(h, s.CooldownTicks);
+            h = Mix(h, s.AttackCooldownTicks);
+            h = Mix(h, s.SwingTicks);
             return h;
         }
     }

@@ -415,10 +415,11 @@ namespace FaceSlapper.FrameSync
                               $"mx={input.MoveX} my={input.MoveY} btn={input.Buttons}");
             }
 
-            // 模拟：移动 → 圆形碰撞 → 击飞判定（与离线自测共用同一代码路径）。
+            // 模拟：移动 → 圆形碰撞 → 击飞判定 → 攻击判定（与离线自测共用同一代码路径）。
             FrameSyncSim.SimulateAll(_batchStates, _batchInputs, _batchActive, count);
             FrameSyncSim.ResolveCollisions(_batchStates, _batchActive, count);
             FrameSyncSim.ResolveHitback(_batchStates, _batchInputs, _batchActive, count);
+            FrameSyncSim.ResolveAttack(_batchStates, _batchInputs, _batchActive, count);
 
             // 写回实体（仅驱动渲染插值；对象已销毁不影响逻辑）。
             for (int i = 0; i < count; i++)

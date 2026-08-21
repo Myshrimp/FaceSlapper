@@ -113,5 +113,11 @@ namespace FaceSlapper.FrameSync
 
         /// <summary>击飞技能冷却剩余 tick。</summary>
         public int CooldownTicks;
+
+        /// <summary>攻击（巴掌）冷却剩余 tick。</summary>
+        public int AttackCooldownTicks;
+
+        /// <summary>挥击表现剩余 tick（渲染层读取；位于模拟状态内以保证各端一致）。</summary>
+        public int SwingTicks;
     }
 }
