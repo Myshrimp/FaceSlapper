@@ -135,12 +135,28 @@ namespace FaceSlapper.Core
             return ok ? "帧同步确定性自检通过（详见 Console）" : "帧同步确定性自检失败（详见 Console 错误日志）";
         }
 
-        /// <summary>帧同步诊断：打印实体/输入映射快照，并开启 5 秒逐 tick 输入日志。用法: FrameSyncDebug</summary>
+        /// <summary>帧同步诊断：打印会话快照，并开启 10 秒诊断窗口（每秒输出水位滞后/回滚次数/最大深度/预测占比）。用法: FrameSyncDebug</summary>
         public string FrameSyncDebug()
         {
             var mgr = Object.FindObjectOfType<FrameSync.FrameSyncManager>();
             if (mgr == null) return "失败：场景中找不到 FrameSyncManager";
             return mgr.DumpDebugState();
+        }
+
+        /// <summary>模拟网络延迟（本端帧同步输入消息收发均延迟，用于回滚实测；仅本端生效，双端需各自设置）。用法: FrameSyncNetDelay 100（固定 100ms）或 FrameSyncNetDelay 100 20（±20ms 抖动），FrameSyncNetDelay 0 关闭</summary>
+        public string FrameSyncNetDelay(int ms)
+        {
+            return FrameSyncNetDelay(ms, 0);
+        }
+
+        public string FrameSyncNetDelay(int ms, int jitterMs)
+        {
+            var mgr = Object.FindObjectOfType<FrameSync.FrameSyncManager>();
+            if (mgr == null) return "失败：场景中找不到 FrameSyncManager";
+            mgr.SetDebugNetDelay(ms, jitterMs);
+            return ms <= 0 && jitterMs <= 0
+                ? "已关闭模拟网络延迟"
+                : $"已开启模拟网络延迟：{Mathf.Max(0, ms)}ms ± {Mathf.Max(0, jitterMs)}ms（仅本端收发帧同步消息）";
         }
 
         /// <summary>写一条日志。用法: Log hello</summary>

@@ -71,16 +71,59 @@ namespace FaceSlapper.FrameSync
         private readonly Dictionary<int, int> _hashBaseline = new Dictionary<int, int>();
         private readonly Dictionary<int, int> _hashReporter = new Dictionary<int, int>();
 
+        // ---------------- 网络延迟模拟（GM 实测入口，仅影响本端收发，不进入模拟） ----------------
+
+        private struct DelayedSend { public float DueTime; public int Tick, MoveX, MoveY, Buttons; }
+        private struct DelayedRecv
+        {
+            public float DueTime;
+            public bool IsRemoval;
+            public FrameInput Input;
+            public int LeftClientId, EffectiveTick;
+        }
+
+        private readonly List<DelayedSend> _delayedSends = new List<DelayedSend>(64);
+        private readonly List<DelayedRecv> _delayedRecvs = new List<DelayedRecv>(64);
+        private int _debugDelayMs;
+        private int _debugJitterMs;
+        private float _lastSendDue;   // 截止时间单调不减：抖动只改变延迟量，不破坏可靠有序假设
+        private float _lastRecvDue;
+
+        /// <summary>模拟网络延迟：本端输入上/下行消息均延迟 ms（±jitterMs），0 关闭并立即冲刷队列。</summary>
+        public void SetDebugNetDelay(int ms, int jitterMs)
+        {
+            _debugDelayMs = Mathf.Max(0, ms);
+            _debugJitterMs = Mathf.Max(0, jitterMs);
+            if (_debugDelayMs == 0 && _debugJitterMs == 0)
+            {
+                FlushDelayedSends(float.MaxValue);
+                FlushDelayedRecvs(float.MaxValue);
+            }
+        }
+
+        // ---------------- 诊断窗口（FrameSyncDebug 开启，每秒一行回滚统计） ----------------
+
+        private const float DiagWindowSeconds = 10f;
+        private float _diagUntil = -1f;
+        private float _diagNextLine;
+        private int _diagRollbacks;
+        private int _diagMaxDepth;
+        private long _diagTotalBase;
+        private long _diagPredictedBase;
+
         // ---------------- 诊断 ----------------
 
-        /// <summary>GM 诊断：返回会话快照（水位线/回滚统计/各玩家位置与确认水位）。</summary>
+        /// <summary>
+        /// GM 诊断：返回会话快照（水位线/回滚统计/各玩家位置与确认水位），
+        /// 并开启 10 秒诊断窗口——每秒输出一行：水位滞后 / 回滚次数 / 最大回滚深度 / 预测输入占比。
+        /// </summary>
         public string DumpDebugState()
         {
             var sb = new StringBuilder(256);
             sb.Append($"localId={Net.LocalClientId} running={IsRunning} pending={_pendingStart} " +
                       $"simTick={_session.SimTick} 水位线={_session.ConfirmedWaterline} " +
                       $"回滚次数={_session.RollbackCount} 最大深度={_session.MaxRollbackDepth} " +
-                      $"desync={_session.Desynced} | ");
+                      $"desync={_session.Desynced} 模拟延迟={_debugDelayMs}±{_debugJitterMs}ms | ");
             for (int i = 0; i < _roster.Length; i++)
             {
                 int id = _roster[i];
@@ -88,6 +131,14 @@ namespace FaceSlapper.FrameSync
                 sb.Append($"玩家#{id} active={_session.IsActive(id)} pos={pos} " +
                           $"确认水位={_session.LatestConfirmedTick(id)} | ");
             }
+
+            _diagUntil = Time.time + DiagWindowSeconds;
+            _diagNextLine = Time.time + 1f;
+            _diagRollbacks = 0;
+            _diagMaxDepth = 0;
+            _diagTotalBase = _session.TotalInputCount;
+            _diagPredictedBase = _session.PredictedInputCount;
+            sb.Append($" || 诊断窗口已开启（{DiagWindowSeconds:0} 秒，每秒一行回滚统计）");
             return sb.ToString();
         }
 
@@ -99,6 +150,11 @@ namespace FaceSlapper.FrameSync
             Instance = this;
             _session.LogWarning = msg => Debug.LogWarning(msg);
             _session.LogError = msg => Debug.LogError(msg);
+            _session.OnRollback = depth =>
+            {
+                _diagRollbacks++;
+                if (depth > _diagMaxDepth) _diagMaxDepth = depth;
+            };
             EventBus.Subscribe<LocalInputEvent>(OnLocalInput);
         }
 
@@ -299,6 +355,11 @@ namespace FaceSlapper.FrameSync
         [NetRpc]
         private void RpcPlayerLeft(int clientId, int effectiveTick)
         {
+            if (DelayEnabled)
+            {
+                EnqueueRecv(new DelayedRecv { IsRemoval = true, LeftClientId = clientId, EffectiveTick = effectiveTick });
+                return;
+            }
             _session.OnPlayerLeft(clientId, effectiveTick);
             Debug.Log($"[FrameSync] 玩家 {clientId} 将于 tick {effectiveTick} 统一移除（冻结在最后状态）");
         }
@@ -306,16 +367,22 @@ namespace FaceSlapper.FrameSync
         [NetRpc]
         private void RpcInput(int clientId, int tick, int moveX, int moveY, int buttons)
         {
-            // 只有经服务器广播回来的输入才进入确认存储（输入封存）；
-            // 若该 tick 已被预测消费且不一致，会话层自动安排回滚。
-            _session.OnConfirmedInput(new FrameInput
+            var fi = new FrameInput
             {
                 Tick = tick,
                 ClientId = clientId,
                 MoveX = moveX,
                 MoveY = moveY,
                 Buttons = buttons,
-            });
+            };
+            if (DelayEnabled)
+            {
+                EnqueueRecv(new DelayedRecv { Input = fi });
+                return;
+            }
+            // 只有经服务器广播回来的输入才进入确认存储（输入封存）；
+            // 若该 tick 已被预测消费且不一致，会话层自动安排回滚。
+            _session.OnConfirmedInput(fi);
         }
 
         // ---------------- 本地节拍与模拟推进 ----------------
@@ -323,7 +390,13 @@ namespace FaceSlapper.FrameSync
         private void Update()
         {
             if (_pendingStart) TryBeginSimulation();
+
+            // 延迟模拟队列冲刷（即使会话未运行也要冲刷，避免残留）。
+            if (_delayedSends.Count > 0) FlushDelayedSends(Time.time);
+            if (_delayedRecvs.Count > 0) FlushDelayedRecvs(Time.time);
+
             if (!IsRunning) return;
+            TickDiagWindow();
 
             float dt = Time.deltaTime;
 
@@ -388,8 +461,88 @@ namespace FaceSlapper.FrameSync
                 Buttons = buttons,
             };
 
-            SendServerRpc(nameof(CmdInput), tick, fi.MoveX, fi.MoveY, buttons);
+            if (DelayEnabled)
+            {
+                float due = NextDue(_debugDelayMs, _debugJitterMs, ref _lastSendDue);
+                _delayedSends.Add(new DelayedSend { DueTime = due, Tick = tick, MoveX = fi.MoveX, MoveY = fi.MoveY, Buttons = buttons });
+            }
+            else
+            {
+                SendServerRpc(nameof(CmdInput), tick, fi.MoveX, fi.MoveY, buttons);
+            }
             _session.SetLocalInput(fi); // 本地自预测来源（输入封存：模拟仍以服务器确认版本为准）
+        }
+
+        // ---------------- 延迟队列与诊断窗口 ----------------
+
+        private bool DelayEnabled => _debugDelayMs > 0 || _debugJitterMs > 0;
+
+        /// <summary>计算下一条消息的截止时间：在基准上叠加抖动，且单调不减（保序）。</summary>
+        private static float NextDue(int delayMs, int jitterMs, ref float lastDue)
+        {
+            float due = Time.time + delayMs / 1000f;
+            if (jitterMs > 0) due += UnityEngine.Random.Range(-jitterMs, jitterMs) / 1000f;
+            if (due < lastDue) due = lastDue;
+            lastDue = due;
+            return due;
+        }
+
+        private void EnqueueRecv(DelayedRecv msg)
+        {
+            msg.DueTime = NextDue(_debugDelayMs, _debugJitterMs, ref _lastRecvDue);
+            _delayedRecvs.Add(msg);
+        }
+
+        private void FlushDelayedSends(float now)
+        {
+            for (int i = 0; i < _delayedSends.Count; i++)
+            {
+                DelayedSend m = _delayedSends[i];
+                if (m.DueTime > now) continue;
+                SendServerRpc(nameof(CmdInput), m.Tick, m.MoveX, m.MoveY, m.Buttons);
+                _delayedSends.RemoveAt(i);
+                i--;
+            }
+        }
+
+        private void FlushDelayedRecvs(float now)
+        {
+            for (int i = 0; i < _delayedRecvs.Count; i++)
+            {
+                DelayedRecv m = _delayedRecvs[i];
+                if (m.DueTime > now) continue;
+                if (m.IsRemoval)
+                {
+                    _session.OnPlayerLeft(m.LeftClientId, m.EffectiveTick);
+                    Debug.Log($"[FrameSync] 玩家 {m.LeftClientId} 将于 tick {m.EffectiveTick} 统一移除（冻结在最后状态）");
+                }
+                else
+                {
+                    _session.OnConfirmedInput(m.Input);
+                }
+                _delayedRecvs.RemoveAt(i);
+                i--;
+            }
+        }
+
+        /// <summary>诊断窗口：每秒输出一行回滚/预测统计（FrameSyncDebug 开启）。</summary>
+        private void TickDiagWindow()
+        {
+            if (Time.time < _diagNextLine) return;
+            if (Time.time >= _diagUntil) { _diagNextLine = float.MaxValue; return; }
+            _diagNextLine += 1f;
+
+            long total = _session.TotalInputCount - _diagTotalBase;
+            long predicted = _session.PredictedInputCount - _diagPredictedBase;
+            _diagTotalBase = _session.TotalInputCount;
+            _diagPredictedBase = _session.PredictedInputCount;
+
+            int lag = _session.SimTick - _session.ConfirmedWaterline;
+            float pct = total > 0 ? predicted * 100f / total : 0f;
+            Debug.Log($"[FrameSync][Diag] tick={_session.SimTick} 水位滞后={lag} " +
+                      $"回滚={_diagRollbacks}次 最大深度={_diagMaxDepth} 预测占比={pct:0.0}%");
+            _diagRollbacks = 0;
+            _diagMaxDepth = 0;
         }
 
         /// <summary>把会话权威状态写回实体（仅驱动渲染插值；对象已销毁不影响逻辑）。</summary>
@@ -477,6 +630,8 @@ namespace FaceSlapper.FrameSync
             _pendingButtons = 0;
             _stallLogged = false;
             _nextHashReport = 0;
+            _delayedSends.Clear();
+            _delayedRecvs.Clear();
         }
 
         // ---------------- 工具 ----------------

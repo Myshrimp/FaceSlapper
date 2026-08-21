@@ -54,6 +54,10 @@ namespace FaceSlapper.FrameSync
         public int RollbackCount { get; private set; }
         public int MaxRollbackDepth { get; private set; }
 
+        /// <summary>累计消费的输入条数 / 其中预测输入条数（诊断统计用，单调递增）。</summary>
+        public long TotalInputCount { get; private set; }
+        public long PredictedInputCount { get; private set; }
+
         /// <summary>发生不可修复分歧（回滚目标/确认输入超出窗口）。</summary>
         public bool Desynced { get; private set; }
 
@@ -62,6 +66,9 @@ namespace FaceSlapper.FrameSync
 
         public Action<string> LogWarning;
         public Action<string> LogError;
+
+        /// <summary>回滚发生事件（参数 = 回滚深度 tick 数），诊断统计用。</summary>
+        public Action<int> OnRollback;
 
         public int[] Roster => _roster;
 
@@ -93,6 +100,8 @@ namespace FaceSlapper.FrameSync
             SimTick = 0;
             RollbackCount = 0;
             MaxRollbackDepth = 0;
+            TotalInputCount = 0;
+            PredictedInputCount = 0;
             Desynced = false;
             LastStallReason = "";
             _rollbackTarget = -1;
@@ -199,6 +208,7 @@ namespace FaceSlapper.FrameSync
                 {
                     _inputs[slot][i] = confirmed;
                     _predicted[slot][i] = false;
+                    TotalInputCount++;
                 }
                 else if (id == _localId)
                 {
@@ -206,6 +216,8 @@ namespace FaceSlapper.FrameSync
                     {
                         _inputs[slot][i] = local;
                         _predicted[slot][i] = true;
+                        TotalInputCount++;
+                        PredictedInputCount++;
                     }
                     else
                     {
@@ -219,6 +231,8 @@ namespace FaceSlapper.FrameSync
                 {
                     _inputs[slot][i] = _proto.GetPrediction(id, SimTick);
                     _predicted[slot][i] = true;
+                    TotalInputCount++;
+                    PredictedInputCount++;
                 }
             }
 
@@ -260,6 +274,7 @@ namespace FaceSlapper.FrameSync
             RollbackCount++;
             int depth = SimTick - rt;
             if (depth > MaxRollbackDepth) MaxRollbackDepth = depth;
+            OnRollback?.Invoke(depth);
             LogWarning?.Invoke($"[FrameSync] 预测错误，回滚 {depth} tick（至 {rt}）并重放");
         }
 
