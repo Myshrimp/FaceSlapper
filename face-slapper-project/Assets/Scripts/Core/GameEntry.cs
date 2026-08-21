@@ -21,6 +21,7 @@ namespace FaceSlapper.Core
             gm.AddAndRegister<LogComponent>();
             gm.AddAndRegister<TimeComponent>();
             gm.AddAndRegister<PoolComponent>();
+            gm.AddAndRegister<StateMachineManager>();
             gm.AddAndRegister<InputComponent>();
             gm.AddAndRegister<NetworkComponent>();
             gm.AddAndRegister<TickComponent>();
