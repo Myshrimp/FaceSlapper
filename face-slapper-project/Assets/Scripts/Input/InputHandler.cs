@@ -23,6 +23,7 @@ namespace FaceSlapper.Input
 
         // 鼠标
         public int AttackButton = 0;
+        public int ChargeButton = 1;
 
         public InputSnapshot Poll()
         {
@@ -36,6 +37,8 @@ namespace FaceSlapper.Input
             snapshot.MoveAxis = Vector2.ClampMagnitude(new Vector2(h, v), 1f);
 
             snapshot.AttackPressed = UnityEngine.Input.GetMouseButtonDown(AttackButton);
+            snapshot.ChargePressed = UnityEngine.Input.GetMouseButtonDown(ChargeButton);
+            snapshot.ChargeReleased = UnityEngine.Input.GetMouseButtonUp(ChargeButton);
             snapshot.PickupPressed = IsDownOnce(Pickup);
             snapshot.HitbackPressed = IsDownOnce(Hitback);
             snapshot.JumpPressed = IsDownOnce(Jump);

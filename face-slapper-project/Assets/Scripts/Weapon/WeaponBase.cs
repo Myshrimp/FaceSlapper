@@ -5,32 +5,83 @@ using UnityEngine;
 namespace FaceSlapper.Weapon
 {
     /// <summary>
-    /// 武器基类（服务器权威归属 + 持有者"虚拟挂载"）：
+    /// 武器基类（服务器权威归属 + 持有者"虚拟挂载" + 状态机驱动攻击）：
     /// - 闲置时在地面由服务器物理模拟（NetTransformSync 广播）；
     /// - 被拾取后服务器写 NetVar HolderNobId 并转移所有权给持有者连接，
     ///   持有者端每帧把武器对齐到手部挂点，其他端靠 NetTransformSync 插值；
     /// - 放下时清除归属、所有权交还服务器、恢复物理。
+    /// 攻击链路（状态机驱动，动画广播全端）：
+    ///   Owner 输入 OnAttack → 服务器冷却校验 → 攻击序号 NetVar 自增（广播全端）
+    ///   → 各端 WeaponFsmComponent 切入 Attack 状态 → WeaponAnimComponent 播动画，
+    ///   Owner 端在状态进入时做命中检测（DoHitCheck）。
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
+    [RequireComponent(typeof(WeaponFsmComponent))]
     public abstract class WeaponBase : NetBehaviour, IWeapon
     {
+        /// <summary>攻击触发器（武器状态机用）。</summary>
+        public const string AttackTrigger = "Attack";
+
+        [Header("攻击")]
+        [SerializeField] protected float _attackInterval = 0.6f;
+        [Tooltip("攻击状态时长（等于攻击动画时长）")]
+        [SerializeField] protected float _attackDuration = 0.25f;
+
+        [Tooltip("攻击判定点（武器尖端）。不设置则用持有者面前位置。")]
+        [SerializeField] protected Transform _tip;
+
+        /// <summary>攻击状态时长（攻击状态据此自动回到待机）。</summary>
+        public float AttackDuration => _attackDuration;
+
         private readonly NetVar<int> _holderNobId = new NetVar<int>(-1);
+        /// <summary>攻击序号（服务器写，广播全端驱动状态机切入攻击）。</summary>
+        private readonly NetVar<int> _attackSeq = new NetVar<int>(0);
 
         /// <summary>持有者的网络对象 Id，-1 表示闲置。</summary>
         public int HolderNobId => _holderNobId.Value;
 
         public bool IsHeld => HolderNobId >= 0;
 
-        [Tooltip("攻击判定点（武器尖端）。不设置则用持有者面前位置。")]
-        [SerializeField] protected Transform _tip;
-
         protected Rigidbody _rb;
+        private WeaponFsmComponent _fsm;
+        private WeaponAnimComponent _anim;
+        private float _lastAttackTime = float.NegativeInfinity;
+        private float _serverLastAttackTime = float.NegativeInfinity;
+
+        /// <summary>动画组件（子类做蓄力表现/强度缩放用）。</summary>
+        protected WeaponAnimComponent Anim => _anim;
+
+        /// <summary>本地冷却是否就绪（Owner 端输入预判）。</summary>
+        protected bool LocalAttackReady => Time.time - _lastAttackTime >= _attackInterval;
+
+        /// <summary>标记本地攻击时刻（发起攻击/冲拳时调用）。</summary>
+        protected void MarkLocalAttack() => _lastAttackTime = Time.time;
+
+        /// <summary>服务器冷却校验（防作弊连发），通过后才能广播攻击。</summary>
+        protected bool ServerValidateAttack()
+        {
+            if (Time.time - _serverLastAttackTime < _attackInterval) return false;
+            _serverLastAttackTime = Time.time;
+            return true;
+        }
+
+        /// <summary>服务器递增攻击序号（NetVar 广播全端驱动状态机）。</summary>
+        protected void ServerBroadcastAttack() => _attackSeq.Value++;
+
+        /// <summary>驱动武器状态机切入攻击状态（全端广播到达时调用）。</summary>
+        protected void FireAttackTrigger()
+        {
+            if (_fsm != null) _fsm.Fire(AttackTrigger);
+        }
 
         protected override void Awake()
         {
             base.Awake();
             _rb = GetComponent<Rigidbody>();
+            _fsm = GetComponent<WeaponFsmComponent>();
+            _anim = GetComponent<WeaponAnimComponent>();
             _holderNobId.OnChange += (prev, next) => ApplyHolderState();
+            _attackSeq.OnChange += (prev, next) => { if (next > prev) OnAttackBroadcast(); };
         }
 
         public override void OnNetSpawnServer() => ApplyHolderState();
@@ -78,6 +129,9 @@ namespace FaceSlapper.Weapon
 
             Transform socket = FindHandSocket(holder);
             transform.SetPositionAndRotation(socket.position, socket.rotation);
+
+            // 攻击动画叠加在跟随之后（Owner 端表现，经 NetTransformSync 同步给其他端）。
+            if (_anim != null) _anim.Apply(transform);
         }
 
         /// <summary>查找持有者对象（服务器/客户端各自的已生成对象表）。</summary>
@@ -145,7 +199,56 @@ namespace FaceSlapper.Weapon
             }
         }
 
-        public abstract void OnAttack();
+        // ---------------- 攻击（状态机驱动，广播全端） ----------------
+
+        /// <summary>攻击入口（Owner 输入）：本地冷却检查 → 请求服务器广播。</summary>
+        public virtual void OnAttack()
+        {
+            if (!IsHeld || !IsOwner) return;
+            if (!LocalAttackReady) return;
+
+            MarkLocalAttack();
+            SendServerRpc(nameof(CmdAttack));
+        }
+
+        /// <summary>蓄力开始（Owner 输入，右键按下）。子类按需重写，默认无行为。</summary>
+        public virtual void OnChargeStart() { }
+
+        /// <summary>蓄力释放（Owner 输入，右键松开）。子类按需重写，默认无行为。</summary>
+        public virtual void OnChargeRelease() { }
+
+        [NetRpc]
+        private void CmdAttack()
+        {
+            // 仅服务器执行：冷却校验（防作弊连发）后递增攻击序号，NetVar 广播全端。
+            if (!ServerValidateAttack()) return;
+            ServerBroadcastAttack();
+        }
+
+        /// <summary>攻击广播到达（全端）：驱动状态机切入攻击状态。</summary>
+        private void OnAttackBroadcast()
+        {
+            FireAttackTrigger();
+        }
+
+        /// <summary>
+        /// 攻击状态进入（全端，由 WeaponAttackState.OnEnter 调用）：
+        /// 播攻击动画；Owner 端额外做命中检测。
+        /// </summary>
+        internal virtual void HandleAttackStateEnter()
+        {
+            if (_anim != null) _anim.Play();
+            if (IsOwner) DoHitCheck();
+        }
+
+        /// <summary>
+        /// 攻击状态期间每物理帧调用（WeaponAttackState.OnFixedUpdate）：
+        /// 子类可重写做持续命中检测（如拳套冲刺中的扫击），默认无行为。
+        /// </summary>
+        internal virtual void HandleAttackStateFixedUpdate() { }
+
+        /// <summary>命中检测（仅 Owner 端，攻击状态进入时调用）。</summary>
+        protected abstract void DoHitCheck();
 
         public virtual void OnActivate() { }
 

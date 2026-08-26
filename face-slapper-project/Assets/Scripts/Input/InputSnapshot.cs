@@ -11,6 +11,12 @@ namespace FaceSlapper.Input
         /// <summary>攻击键按下（鼠标左键，按下那一帧为 true）。</summary>
         public bool AttackPressed;
 
+        /// <summary>蓄力键按下（鼠标右键，按下那一帧为 true）。</summary>
+        public bool ChargePressed;
+
+        /// <summary>蓄力键松开（鼠标右键，松开那一帧为 true）。</summary>
+        public bool ChargeReleased;
+
         /// <summary>拾取/放下键按下（E）。</summary>
         public bool PickupPressed;
 

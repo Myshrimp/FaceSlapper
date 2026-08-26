@@ -16,6 +16,7 @@ namespace FaceSlapper.Room
     {
         [SerializeField] private NetObject _playerPrefab;
         [SerializeField] private NetObject _weaponPrefab;
+        [SerializeField] private NetObject _gloveWeaponPrefab;
 
         /// <summary>房间内玩家列表（服务器写，全员同步）。</summary>
         public readonly NetList<RoomPlayerInfo> Players = new NetList<RoomPlayerInfo>();
@@ -84,6 +85,9 @@ namespace FaceSlapper.Room
         /// <summary>请求在指定位置生成武器。</summary>
         public void RequestSpawnWeapon(Vector3 position) => SendServerRpc(nameof(CmdSpawnWeapon), position);
 
+        /// <summary>请求在指定位置生成拳套武器。</summary>
+        public void RequestSpawnGloveWeapon(Vector3 position) => SendServerRpc(nameof(CmdSpawnGloveWeapon), position);
+
         /// <summary>请求设置玩家队伍。</summary>
         public void RequestSetTeam(int clientId, int teamId) => SendServerRpc(nameof(CmdSetTeam), clientId, teamId);
 
@@ -132,6 +136,17 @@ namespace FaceSlapper.Room
                 return;
             }
             Net.Server.Spawn(_weaponPrefab, position, Quaternion.identity);
+        }
+
+        [NetRpc]
+        private void CmdSpawnGloveWeapon(Vector3 position)
+        {
+            if (_gloveWeaponPrefab == null)
+            {
+                Debug.LogError("[Room] 未配置拳套武器 Prefab（_gloveWeaponPrefab）。");
+                return;
+            }
+            Net.Server.Spawn(_gloveWeaponPrefab, position, Quaternion.identity);
         }
 
         [NetRpc]

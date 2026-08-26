@@ -143,6 +143,9 @@ MonoBehaviour:
   _turnSpeed: 720
   _knockbackRecoverTime: 0.35
   _knockbackUpRatio: 0.5
+  _groundNormalY: 0.7
+  _jumpSpeed: 7
+  _groundCheckDistance: 0.15
 --- !u!114 &8998801983941916762
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -256,7 +259,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584171274195275213
+  _initializedTimestamp: -8584140490421114162
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -275,7 +278,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 9
+  <PrefabId>k__BackingField: 10
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 12455125801259003321
   SceneId: 0

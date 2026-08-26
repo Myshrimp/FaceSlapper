@@ -27,8 +27,13 @@ namespace FaceSlapper.EditorTools
         public const string FaceMatPath = MaterialDir + "/M_ToonFace.mat";
         public const string HandMatPath = MaterialDir + "/M_ToonHand.mat";
         public const string WeaponMatPath = MaterialDir + "/M_ToonWeapon.mat";
+        public const string GloveMatPath = MaterialDir + "/M_ToonGlove.mat";
+        public const string SlimeMatPath = MaterialDir + "/M_ToonSlime.mat";
         public const string DotEyeMatPath = MaterialDir + "/dot_eye.mat";
         public const string EyeDotTexPath = TextureDir + "/EyeDotTex.png";
+        public const string StarTexPath = TextureDir + "/StarTex.png";
+        public const string StarTexRuntimePath = "Assets/Resources/Art/Textures/StarTex.png";
+        public const string StarDecalMatPath = MaterialDir + "/star_decal.mat";
 
         [MenuItem("FaceSlapper/Generate Art Assets", priority = 2)]
         public static void GenerateArtAssets()
@@ -47,6 +52,7 @@ namespace FaceSlapper.EditorTools
             EnsureRampTexture();
             EnsureHandMeshes();
             EnsureEyeDotTexture();
+            EnsureStarTexture();
             EnsureMaterials();
         }
 
@@ -229,6 +235,41 @@ namespace FaceSlapper.EditorTools
             weapon.SetTexture("_RampMap", ramp);
             weapon.SetColor("_BaseColor", new Color(0.95f, 0.75f, 0.20f));
 
+            // 拳套材质：经典红色。
+            Material glove = EnsureToonMaterial(GloveMatPath, toon);
+            glove.SetTexture("_RampMap", ramp);
+            glove.SetColor("_BaseColor", new Color(0.80f, 0.15f, 0.15f));
+
+            // 史莱姆材质：不透明果冻质感（硬边高光 + 边缘光 + 顶点抖动），
+            // 用于角色外观——把角色身体的材质换成它即可。
+            Shader slimeShader = Shader.Find("FaceSlapper/ToonSlime");
+            if (slimeShader != null)
+            {
+                var slime = AssetDatabase.LoadAssetAtPath<Material>(SlimeMatPath);
+                if (slime == null)
+                {
+                    slime = new Material(slimeShader) { name = "M_ToonSlime" };
+                    AssetDatabase.CreateAsset(slime, SlimeMatPath);
+                }
+                if (slime.shader != slimeShader) slime.shader = slimeShader;
+                slime.SetColor("_BaseColor", new Color(0.35f, 0.90f, 0.45f));   // 经典史莱姆绿
+                slime.SetTexture("_RampMap", ramp);
+                slime.SetColor("_SpecColor", Color.white);
+                slime.SetFloat("_SpecSize", 0.06f);
+                slime.SetFloat("_SpecStrength", 1.2f);
+                slime.SetColor("_RimColor", new Color(0.60f, 1.00f, 0.70f));
+                slime.SetFloat("_RimPower", 3f);
+                slime.SetFloat("_RimStrength", 0.8f);
+                slime.SetFloat("_WobbleAmp", 0.02f);
+                slime.SetFloat("_WobbleFreq", 6f);
+                slime.SetFloat("_WobbleSpeed", 5f);
+                EditorUtility.SetDirty(slime);
+            }
+            else
+            {
+                Debug.LogError("[FaceSlapper] 找不到 FaceSlapper/ToonSlime Shader。");
+            }
+
             // 豆豆眼贴花材质：形状由贴图 Alpha 决定，任意面片可用。
             Shader decal = Shader.Find("FaceSlapper/ToonDecal");
             if (decal != null)
@@ -243,6 +284,18 @@ namespace FaceSlapper.EditorTools
                 eyeMat.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(EyeDotTexPath));
                 eyeMat.SetColor("_BaseColor", Color.white);
                 EditorUtility.SetDirty(eyeMat);
+
+                // 星星贴花材质：眩晕头顶星星用，黄色。
+                var starMat = AssetDatabase.LoadAssetAtPath<Material>(StarDecalMatPath);
+                if (starMat == null)
+                {
+                    starMat = new Material(decal) { name = "star_decal" };
+                    AssetDatabase.CreateAsset(starMat, StarDecalMatPath);
+                }
+                if (starMat.shader != decal) starMat.shader = decal;
+                starMat.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(StarTexPath));
+                starMat.SetColor("_BaseColor", new Color(1f, 0.9f, 0.2f));
+                EditorUtility.SetDirty(starMat);
             }
             else
             {
@@ -272,6 +325,47 @@ namespace FaceSlapper.EditorTools
             }
 
             WritePng(pixels, w, h, EyeDotTexPath, FilterMode.Bilinear, alphaIsTransparency: true, wrapMode: TextureWrapMode.Clamp);
+        }
+
+        /// <summary>生成星星贴图：透明底 + 白色五角星（Alpha 决定形状，供眩晕表现用）。</summary>
+        private static void EnsureStarTexture()
+        {
+            const int w = 128, h = 128;
+            const float cx = 64f, cy = 64f;
+            const float outer = 56f, inner = 23f;
+
+            // 五角星轮廓（10 个顶点，尖角朝上）。
+            var poly = new Vector2[10];
+            for (int k = 0; k < 10; k++)
+            {
+                float r = k % 2 == 0 ? outer : inner;
+                // 注意贴图 Y 轴向下：用 -90° 起始让尖角朝上。
+                float a = (-90f + k * 36f) * Mathf.Deg2Rad;
+                poly[k] = new Vector2(cx + r * Mathf.Cos(a), cy + r * Mathf.Sin(a));
+            }
+
+            var pixels = new Color[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    // 射线法点-in-多边形，硬边即可（卡通风格）。
+                    bool inside = false;
+                    for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
+                    {
+                        if ((poly[i].y > y) != (poly[j].y > y) &&
+                            x < (poly[j].x - poly[i].x) * (y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x)
+                            inside = !inside;
+                    }
+                    pixels[y * w + x] = new Color(1f, 1f, 1f, inside ? 1f : 0f);
+                }
+            }
+
+            WritePng(pixels, w, h, StarTexPath, FilterMode.Bilinear, alphaIsTransparency: true, wrapMode: TextureWrapMode.Clamp);
+
+            // 额外写一份到 Resources，供运行时（HitFeedbackComponent）Resources.Load。
+            Directory.CreateDirectory(Path.GetDirectoryName(StarTexRuntimePath));
+            WritePng(pixels, w, h, StarTexRuntimePath, FilterMode.Bilinear, alphaIsTransparency: true, wrapMode: TextureWrapMode.Clamp);
         }
 
         private static Material EnsureToonMaterial(string path, Shader toon)

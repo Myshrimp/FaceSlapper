@@ -19,4 +19,25 @@ namespace FaceSlapper.Core
         public Vector3 Direction;
         public float Force;
     }
+
+    /// <summary>玩家被撞入眩晕事件（重击飞行中撞障碍触发，表现层可监听）。</summary>
+    public struct PlayerStunnedEvent
+    {
+        public int NetId;
+        public float Duration;
+    }
+
+    /// <summary>命中表现事件（服务器广播全端，音效/粒子反馈用）。</summary>
+    public struct PlayerHitFxEvent
+    {
+        public Vector3 Position;
+        public Vector3 Direction;
+        public float Force;
+    }
+
+    /// <summary>眩晕表现事件（服务器广播全端，音效/粒子反馈用）。</summary>
+    public struct PlayerStunFxEvent
+    {
+        public Vector3 Position;
+    }
 }

@@ -56,6 +56,12 @@ namespace FaceSlapper.Core
             return Room.SpawnWeapon(new Vector3(x, 1f, z)) ? $"已在 ({x}, {z}) 生成武器" : "失败：未连接网络";
         }
 
+        /// <summary>在指定位置生成一副拳套。用法: SpawnGlove 2 3</summary>
+        public string SpawnGlove(float x, float z)
+        {
+            return Room.SpawnGloveWeapon(new Vector3(x, 1f, z)) ? $"已在 ({x}, {z}) 生成拳套" : "失败：未连接网络";
+        }
+
         /// <summary>打印房间内所有玩家。</summary>
         public string ListPlayers()
         {

@@ -22,6 +22,7 @@ namespace FaceSlapper.Core
         private string _input = string.Empty;
         private Vector2 _scroll;
         private bool _focusRequested;
+        private int _lastLineCount;
 
         private void Update()
         {
@@ -40,21 +41,31 @@ namespace FaceSlapper.Core
             const float height = 320f;
             GUILayout.BeginArea(new Rect(10, Screen.height - height - 10, width, height), GUI.skin.box);
 
-            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(height - 70));
+            // 快捷命令按钮：GUILayout 流式布局，不再用绝对 Rect 覆盖日志区。
+            string[] usefulCmd = { "Host", "Join", "StartGame", "SpawnGlove 2 3" };
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < usefulCmd.Length; i++)
+            {
+                string str = usefulCmd[i];
+                if (GUILayout.Button(str, GUILayout.Height(22)))
+                {
+                    Execute($"/gm func {str}");
+                    _focusRequested = true; // 按钮点击后焦点回到输入框
+                }
+            }
+            GUILayout.EndHorizontal();
+
+            // 有新日志时自动滚动到底部。
+            if (_lines.Count != _lastLineCount)
+            {
+                _lastLineCount = _lines.Count;
+                _scroll.y = float.MaxValue;
+            }
+
+            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
             for (int i = 0; i < _lines.Count; i++)
                 GUILayout.Label(_lines[i]);
             GUILayout.EndScrollView();
-
-            string[] usefulCmd = {"Host", "Join", "StartGame"};
-            for(int i= 0 ; i<usefulCmd.Length; i++)
-            {
-                string str = usefulCmd[i];
-                if(GUI.Button(new Rect(0, 0 + i*22, 40, 20), str))
-                {
-                    string cmd = $"/gm func {str}";
-                    Execute(cmd);
-                }
-            }
 
             GUI.SetNextControlName("GMInput");
             _input = GUILayout.TextField(_input, GUILayout.Height(24));

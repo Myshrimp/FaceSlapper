@@ -26,6 +26,7 @@ namespace FaceSlapper.EditorTools
         private const string MaterialDir = "Assets/Materials";
         private const string SceneDir = "Assets/Scenes";
         private const string ScenePath = SceneDir + "/Main.unity";
+        private const string GloveModelPath = "Assets/Art/Meshes/Accessories/BoxingGlove_HiPoly.obj";
         private const ushort Port = 7770;
 
         [MenuItem("FaceSlapper/Setup All", priority = 0)]
@@ -36,14 +37,16 @@ namespace FaceSlapper.EditorTools
 
             GameObject playerPrefab = CreatePlayerPrefab();
             GameObject weaponPrefab = CreateWeaponPrefab();
+            GameObject glovePrefab = CreateGloveWeaponPrefab();
             Net.Backend.EditorRegisterSpawnablePrefab(playerPrefab);
             Net.Backend.EditorRegisterSpawnablePrefab(weaponPrefab);
-            CreateMainScene(playerPrefab, weaponPrefab);
+            Net.Backend.EditorRegisterSpawnablePrefab(glovePrefab);
+            CreateMainScene(playerPrefab, weaponPrefab, glovePrefab);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("[FaceSlapper] 搭建完成！进入 Main 场景点击 Play，" +
-                      "按 ` 打开 GM 命令行：Host() 开房，另一实例 Join(ip) 进房，StartGame() 开始，SpawnWeapon(0,0) 生成武器。");
+                      "按 ` 打开 GM 命令行：Host() 开房，另一实例 Join(ip) 进房，StartGame() 开始，SpawnWeapon(0,0) 生成武器，SpawnGlove(0,0) 生成拳套。");
         }
 
         [MenuItem("FaceSlapper/Create Prefabs", priority = 1)]
@@ -52,10 +55,23 @@ namespace FaceSlapper.EditorTools
             EnsureFolders();
             GameObject playerPrefab = CreatePlayerPrefab();
             GameObject weaponPrefab = CreateWeaponPrefab();
+            GameObject glovePrefab = CreateGloveWeaponPrefab();
             Net.Backend.EditorRegisterSpawnablePrefab(playerPrefab);
             Net.Backend.EditorRegisterSpawnablePrefab(weaponPrefab);
+            Net.Backend.EditorRegisterSpawnablePrefab(glovePrefab);
             AssetDatabase.SaveAssets();
             Debug.Log("[FaceSlapper] Prefab 已生成并注册。");
+        }
+
+        /// <summary>只生成拳套武器 Prefab 并注册（不重建场景）。</summary>
+        [MenuItem("FaceSlapper/Create Glove Weapon Prefab", priority = 2)]
+        public static void CreateGloveWeaponPrefabOnly()
+        {
+            EnsureFolders();
+            GameObject glovePrefab = CreateGloveWeaponPrefab();
+            Net.Backend.EditorRegisterSpawnablePrefab(glovePrefab);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[FaceSlapper] 拳套武器 Prefab 已生成并注册。");
         }
 
         // ---------------- Prefab ----------------
@@ -129,6 +145,17 @@ namespace FaceSlapper.EditorTools
                 root.AddComponent<PickWeaponAbility>();
                 root.AddComponent<SpeedUpAbility>();
                 root.AddComponent<HandVisuals>();
+
+                // 眩晕头顶星星表现（显隐由 NetworkIdentity.IsStunned NetVar 驱动）。
+                var stunVisual = root.AddComponent<StunVisual>();
+                SetObjectReference(stunVisual, "_starMaterial",
+                    AssetDatabase.LoadAssetAtPath<Material>(FaceSlapperArtSetup.StarDecalMatPath));
+
+                // 史莱姆挤压拉伸驱动（速度联动形变，配 ToonSlime 材质生效）。
+                root.AddComponent<SlimeSquashDriver>();
+
+                // 玩家状态机（Normal/Launched/Stunned，驱动移动/击飞/眩晕节奏）。
+                root.AddComponent<PlayerFsmComponent>();
 
                 // 后端无关的位置同步 + 后端专属组件（NetworkObject/桥接等）。
                 root.AddComponent<NetTransformSync>();
@@ -215,6 +242,15 @@ namespace FaceSlapper.EditorTools
 
                 var weapon = root.AddComponent<SlapperWeapon>();
                 SetObjectReference(weapon, "_tip", tip.transform);
+                SetFloatField(weapon, "_attackInterval", 0.6f);
+                SetFloatField(weapon, "_attackDuration", 0.22f);
+
+                // 状态机 + 动画组件（挥舞样式）。
+                root.AddComponent<WeaponFsmComponent>();
+                var anim = root.AddComponent<WeaponAnimComponent>();
+                SetEnumField(anim, "_style", (int)WeaponAnimComponent.AnimStyle.Swing);
+                SetFloatField(anim, "_duration", 0.22f);
+                SetFloatField(anim, "_swingAngle", -80f);
 
                 root.AddComponent<NetTransformSync>();
                 Net.Backend.EditorEnsurePrefabComponents(root);
@@ -230,9 +266,77 @@ namespace FaceSlapper.EditorTools
             }
         }
 
+        /// <summary>
+        /// 创建拳套武器 Prefab：视觉体使用程序化生成的高面数拳套模型
+        /// （Assets/Art/Meshes/Accessories/BoxingGlove_HiPoly.obj，手指朝 +Z）。
+        /// </summary>
+        private static GameObject CreateGloveWeaponPrefab()
+        {
+            var root = new GameObject("BoxingGloveWeapon");
+            try
+            {
+                Rigidbody rb = root.AddComponent<Rigidbody>();
+                rb.interpolation = RigidbodyInterpolation.Interpolate;
+                rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+
+                var collider = root.AddComponent<SphereCollider>();
+                collider.center = new Vector3(0f, 0f, 0.05f);
+                collider.radius = 0.24f;
+
+                // 视觉体（高面数拳套模型）。
+                GameObject modelAsset = AssetDatabase.LoadAssetAtPath<GameObject>(GloveModelPath);
+                if (modelAsset == null)
+                    Debug.LogError($"[FaceSlapper] 找不到拳套模型: {GloveModelPath}（请先运行模型生成脚本）。");
+                else
+                {
+                    GameObject visual = (GameObject)PrefabUtility.InstantiatePrefab(modelAsset);
+                    visual.name = "Visual";
+                    visual.transform.SetParent(root.transform, false);
+                    visual.transform.localPosition = Vector3.zero;
+                    visual.transform.localRotation = Quaternion.identity;
+                    visual.transform.localScale = new Vector3(1.2f, 1.2f, 1.2f); // 夸张一号，符合卡通手感
+
+                    Material gloveMat = AssetDatabase.LoadAssetAtPath<Material>(FaceSlapperArtSetup.GloveMatPath);
+                    foreach (Renderer r in visual.GetComponentsInChildren<Renderer>())
+                        if (gloveMat != null) r.sharedMaterial = gloveMat;
+                }
+
+                // 攻击判定点（拳峰）。
+                var tip = new GameObject("Tip");
+                tip.transform.SetParent(root.transform, false);
+                tip.transform.localPosition = new Vector3(0f, 0f, 0.28f);
+
+                var weapon = root.AddComponent<BoxingGloveWeapon>();
+                SetObjectReference(weapon, "_tip", tip.transform);
+                SetFloatField(weapon, "_attackInterval", 0.9f);
+                // 攻击状态时长需覆盖冲刺窗口（0.28s），保证冲刺全程有持续命中检测。
+                SetFloatField(weapon, "_attackDuration", 0.3f);
+
+                // 状态机 + 动画组件（冲拳样式 + 蓄力后拉）。
+                root.AddComponent<WeaponFsmComponent>();
+                var anim = root.AddComponent<WeaponAnimComponent>();
+                SetEnumField(anim, "_style", (int)WeaponAnimComponent.AnimStyle.Lunge);
+                SetFloatField(anim, "_duration", 0.3f);
+                SetFloatField(anim, "_lungeDistance", 0.6f);
+                SetFloatField(anim, "_chargePullBack", 0.4f);
+
+                root.AddComponent<NetTransformSync>();
+                Net.Backend.EditorEnsurePrefabComponents(root);
+
+                string path = PrefabDir + "/BoxingGloveWeapon.prefab";
+                GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log($"[FaceSlapper] 拳套武器 Prefab: {path}");
+                return prefab;
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
         // ---------------- 场景 ----------------
 
-        private static void CreateMainScene(GameObject playerPrefab, GameObject weaponPrefab)
+        private static void CreateMainScene(GameObject playerPrefab, GameObject weaponPrefab, GameObject glovePrefab)
         {
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -250,6 +354,7 @@ namespace FaceSlapper.EditorTools
             Net.Backend.EditorEnsurePrefabComponents(roomGo);
             SetObjectReference(room, "_playerPrefab", playerPrefab.GetComponent<NetObject>());
             SetObjectReference(room, "_weaponPrefab", weaponPrefab.GetComponent<NetObject>());
+            SetObjectReference(room, "_gloveWeaponPrefab", glovePrefab.GetComponent<NetObject>());
 
             CreateArena();
             CreateSpawnPoints();
@@ -366,6 +471,34 @@ namespace FaceSlapper.EditorTools
                 return;
             }
             prop.objectReferenceValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>通过 SerializedObject 给 private [SerializeField] float 字段赋值。</summary>
+        private static void SetFloatField(Object target, string fieldName, float value)
+        {
+            var so = new SerializedObject(target);
+            SerializedProperty prop = so.FindProperty(fieldName);
+            if (prop == null)
+            {
+                Debug.LogWarning($"[FaceSlapper] 字段 {fieldName} 在 {target.GetType().Name} 上未找到。");
+                return;
+            }
+            prop.floatValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>通过 SerializedObject 给 private [SerializeField] 枚举字段赋值（按底层 int 写入）。</summary>
+        private static void SetEnumField(Object target, string fieldName, int value)
+        {
+            var so = new SerializedObject(target);
+            SerializedProperty prop = so.FindProperty(fieldName);
+            if (prop == null)
+            {
+                Debug.LogWarning($"[FaceSlapper] 字段 {fieldName} 在 {target.GetType().Name} 上未找到。");
+                return;
+            }
+            prop.intValue = value;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
     }

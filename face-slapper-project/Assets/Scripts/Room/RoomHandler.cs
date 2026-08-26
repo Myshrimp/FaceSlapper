@@ -68,6 +68,14 @@ namespace FaceSlapper.Room
             return true;
         }
 
+        /// <summary>请求在指定位置生成拳套武器。</summary>
+        public bool SpawnGloveWeapon(Vector3 position)
+        {
+            if (!RoomReady(out RoomComponent room)) return false;
+            room.RequestSpawnGloveWeapon(position);
+            return true;
+        }
+
         /// <summary>请求设置队伍。</summary>
         public bool SetTeam(int clientId, int teamId)
         {

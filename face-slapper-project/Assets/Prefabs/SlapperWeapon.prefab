@@ -125,8 +125,10 @@ GameObject:
   - component: {fileID: 1552236842401188127}
   - component: {fileID: 3083684717292324332}
   - component: {fileID: 5580514831267069996}
+  - component: {fileID: 6013288136086510742}
   - component: {fileID: 7229513600847585491}
   - component: {fileID: 4581870885387050229}
+  - component: {fileID: 1281290623910308903}
   - component: {fileID: 2702865694446864604}
   - component: {fileID: 6204558407785344637}
   - component: {fileID: 2095954238962378384}
@@ -202,6 +204,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.16, y: 0.7, z: 1.3}
   m_Center: {x: 0, y: 0.35, z: 0.55}
+--- !u!114 &6013288136086510742
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8365453877596396608}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 741ec818417cb894b9a0d45ecf985c96, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  TickEnabled: 1
 --- !u!114 &7229513600847585491
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -226,12 +241,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 028461a2c3f8fa54eb99b1d9dc3523c0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _attackInterval: 0.6
+  _attackDuration: 0.22
   _tip: {fileID: 2731927547533302820}
   _force: 12
   _hitRadius: 1.4
-  _attackInterval: 0.6
-  _swingTime: 0.22
+--- !u!114 &1281290623910308903
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8365453877596396608}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4c1104e170754547a409bf21b68f05a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _style: 0
+  _duration: 0.22
   _swingAngle: -80
+  _lungeDistance: 0.5
+  _chargePullBack: 0.35
 --- !u!114 &2702865694446864604
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -264,8 +295,7 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours:
-  - {fileID: 2095954238962378384}
+  NetworkBehaviours: []
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -276,7 +306,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584171274195275213
+  _initializedTimestamp: 0
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -295,15 +325,15 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 5
+  <PrefabId>k__BackingField: 65535
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 6924962289651332427
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-    Scale: {x: 1, y: 1, z: 1}
-    IsValid: 1
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
 --- !u!114 &2095954238962378384
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -316,6 +346,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7a902ff4108854d4d9c642fe420f457d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 0
+  _componentIndexCache: 255
   _addedNetworkObject: {fileID: 6204558407785344637}
-  _networkObjectCache: {fileID: 6204558407785344637}
+  _networkObjectCache: {fileID: 0}

@@ -64,9 +64,20 @@ namespace FaceSlapper.Battle
 
             InputSnapshot snapshot = input.Current;
 
+            // 眩晕中禁止一切攻击/技能输入。
+            if (_buffComponent != null && _buffComponent.HasBuff<StunBuff>()) return;
+
             // 攻击：仅在持有武器且拥有武器所有权时生效。
-            if (snapshot.AttackPressed && HeldWeapon != null && HeldWeapon.IsOwner)
-                HeldWeapon.OnAttack();
+            if (HeldWeapon != null && HeldWeapon.IsOwner)
+            {
+                if (snapshot.AttackPressed)
+                    HeldWeapon.OnAttack();
+                // 蓄力攻击（拳套：右键按住蓄力，松开冲拳）。
+                if (snapshot.ChargePressed)
+                    HeldWeapon.OnChargeStart();
+                if (snapshot.ChargeReleased)
+                    HeldWeapon.OnChargeRelease();
+            }
 
             // 击飞技能（空手"耳光"）。
             if (snapshot.HitbackPressed)

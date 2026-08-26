@@ -1,3 +1,4 @@
+using FaceSlapper.Battle;
 using FaceSlapper.Input;
 using FaceSlapper.Match;
 using FaceSlapper.Network;
@@ -29,6 +30,7 @@ namespace FaceSlapper.Core
             gm.AddAndRegister<RoomHandler>();
             gm.AddAndRegister<MatchHandler>();
             gm.AddAndRegister<GMComponent>();
+            gm.AddAndRegister<HitFeedbackComponent>();
 
             // GM 调试命令行（IMGUI，不属于注册组件）。
             if (gm.GetComponent<GMConsole>() == null)
