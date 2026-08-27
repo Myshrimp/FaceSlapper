@@ -20,7 +20,6 @@ namespace FaceSlapper.Core
 
             // 基础组件优先，业务组件在后。
             gm.AddAndRegister<LogComponent>();
-            gm.AddAndRegister<TimeComponent>();
             gm.AddAndRegister<PoolComponent>();
             gm.AddAndRegister<StateMachineManager>();
             gm.AddAndRegister<InputComponent>();

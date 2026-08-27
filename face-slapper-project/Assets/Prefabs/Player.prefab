@@ -372,6 +372,7 @@ GameObject:
   - component: {fileID: 2495308382484821462}
   - component: {fileID: 700347130177172325}
   - component: {fileID: 3731762863683403879}
+  - component: {fileID: 2659802344968959120}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -711,6 +712,28 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 700347130177172325}
   _networkObjectCache: {fileID: 700347130177172325}
+--- !u!114 &2659802344968959120
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4821898030838321630}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 66b7321221806e046821ae194a3d5931, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GlobalMainTimeline:
+    StartPoint: 0
+    CurTick: 0
+    CurPredictedTick: 0
+    Length: 0
+    Started: 0
+    Stopped: 0
+    Ended: 0
+    Id: 
+    TicksPerClear: 0
 --- !u!1 &5456271714418898878
 GameObject:
   m_ObjectHideFlags: 0

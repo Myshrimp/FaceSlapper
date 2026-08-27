@@ -3,19 +3,26 @@ using FaceSlapper.Core;
 namespace FaceSlapper.Battle
 {
     /// <summary>
-    /// Buff 基类：处理持续时间（Timer）、失效标记与上下文链的通用样板。
+    /// Buff 基类：处理持续时间（按服务器权威 Timeline tick 倒计时）、失效标记与上下文链的通用样板。
     /// 派生类通过重写 Duration / PowerMultiplier / OnUse 提供具体增益。
+    /// 倒计时由 BuffComponent 订阅 TimelineManager.Ticked 驱动，各端跟随同一权威 tick 流，天然对齐。
     /// </summary>
     public class BuffBase : IBuff, IPoolable
     {
-        protected Timer _timer;
         protected IBuff _curBuff;
         protected string buffName;
         protected BuffComponent _owner;
         private bool _expired;
+        private int _remainingTicks;
 
         /// <summary>持续秒数；&lt;=0 表示永久有效。</summary>
         public virtual float Duration => 0f;
+
+        /// <summary>持续 tick 数（按 GameSettings.TicksPerSec 换算）；&lt;=0 表示永久有效。</summary>
+        public int DurationTicks => GameSettings.Sec2Ticks(Duration);
+
+        /// <summary>剩余 tick 数（调试/界面显示用）。</summary>
+        public int RemainingTicks => _remainingTicks;
 
         /// <summary>技能威力倍率（角色使用 Ability 时提供的增益）。</summary>
         public virtual float PowerMultiplier => 1f;
@@ -26,12 +33,11 @@ namespace FaceSlapper.Battle
         {
             _owner = owner;
             _expired = false;
-            StartTimer();
+            _remainingTicks = DurationTicks;
         }
 
         public virtual void OnDetach()
         {
-            ReleaseTimer();
             _owner = null;
         }
 
@@ -49,34 +55,21 @@ namespace FaceSlapper.Battle
         /// <summary>标记 Buff 失效（BuffComponent 会在下一帧将其移除）。</summary>
         protected void Expire() => _expired = true;
 
+        /// <summary>
+        /// 主 Timeline 每推进一帧由 BuffComponent 调用一次；
+        /// 倒计时归零时标记失效。永久 Buff（Duration &lt;= 0）不倒计时。
+        /// </summary>
+        internal void TickDown()
+        {
+            if (_expired || Duration <= 0f) return;
+            if (--_remainingTicks <= 0) Expire();
+        }
+
         /// <summary>刷新持续时间（重复获得同类 Buff 时调用）。</summary>
         public void Refresh()
         {
             _expired = false;
-            if (_timer != null)
-                _timer.Reset();
-            else
-                StartTimer();
-        }
-
-        private void StartTimer()
-        {
-            if (Duration <= 0f || !GameManager.HasInstance) return;
-            TimeComponent time = GameManager.Instance.Get<TimeComponent>();
-            if (time == null) return;
-            _timer = time.CreateTimer(Duration, Expire);
-        }
-
-        private void ReleaseTimer()
-        {
-            if (_timer == null) return;
-            _timer.Stop();
-            if (GameManager.HasInstance)
-            {
-                TimeComponent time = GameManager.Instance.Get<TimeComponent>();
-                if (time != null) time.RemoveTimer(_timer);
-            }
-            _timer = null;
+            _remainingTicks = DurationTicks;
         }
 
         public string[] GetContext()
@@ -98,7 +91,7 @@ namespace FaceSlapper.Battle
 
         public virtual void OnReturn()
         {
-            ReleaseTimer();
+            _remainingTicks = 0;
             _owner = null;
             _curBuff = null;
         }
