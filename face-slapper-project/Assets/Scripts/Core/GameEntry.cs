@@ -36,6 +36,9 @@ namespace FaceSlapper.Core
             // GM 调试命令行（IMGUI，不属于注册组件）。
             if (gm.GetComponent<GMConsole>() == null)
                 gm.gameObject.AddComponent<GMConsole>();
+
+            // 大厅面板：接管 Host/Join/开始游戏 的 UI 入口（纯代码构建，无需预制体）。
+            LobbyPanel.Open();
         }
     }
 }
