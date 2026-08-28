@@ -45,15 +45,33 @@ namespace FaceSlapper.Weapon
         /// </summary>
         private readonly NetVar<int> _punchBroadcast = new NetVar<int>(0);
 
+        /// <summary>蓄力特效等级（服务器写，0-16 量化）：驱动全端 ChargeFxComponent。</summary>
+        private readonly NetVar<int> _chargeFxLevel = new NetVar<int>(0);
+
+        [Header("蓄力特效")]
+        [Tooltip("ChargeFx prefab（空间扭曲 + 内缩粒子），生成时实例化为武器子物体")]
+        [SerializeField] private ChargeFxComponent _chargeFxPrefab;
+
         private bool _charging;     // Owner 端蓄力中
         private float _charge;      // Owner 端本地蓄力进度 0-1
         private float _lastCharge;  // 最近一次出拳的蓄力等级（全端可读，动画/命中缩放）
         private readonly HashSet<int> _hitVictims = new HashSet<int>(8);  // 单次冲拳已命中的目标
+        private ChargeFxComponent _fx;
+        private int _lastFxLevel = -1;  // Owner 端已上报的特效等级（变化时才发 RPC）
 
         protected override void Awake()
         {
             base.Awake();
             _punchBroadcast.OnChange += OnPunchBroadcast;
+            if (_chargeFxPrefab != null)
+            {
+                _fx = Instantiate(_chargeFxPrefab, transform);
+                _chargeFxLevel.OnChange += (prev, next) => _fx.SetCharge(next / 16f);
+            }
+            else
+            {
+                Debug.LogWarning("[BoxingGlove] 未配置蓄力特效 prefab（_chargeFxPrefab）。");
+            }
         }
 
         /// <summary>拳套不响应左键普攻，攻击只有蓄力冲拳一种。</summary>
@@ -104,6 +122,13 @@ namespace FaceSlapper.Weapon
             if (Anim != null) Anim.ChargeAmount = _charge;
             // 蓄力期间相机轻微持续抖动（随蓄力进度增强）。
             if (PlayerCameraRig.Instance != null) PlayerCameraRig.Instance.SetChargeShake(_charge);
+            // 蓄力特效等级量化上报（16 级，变化才发 RPC），服务器经 NetVar 广播全端。
+            int fxLevel = Mathf.RoundToInt(_charge * 16f);
+            if (fxLevel != _lastFxLevel)
+            {
+                _lastFxLevel = fxLevel;
+                SendServerRpc(nameof(CmdSetChargeFx), fxLevel);
+            }
         }
 
         private void CancelCharge()
@@ -112,6 +137,18 @@ namespace FaceSlapper.Weapon
             _charge = 0f;
             if (Anim != null) Anim.ChargeAmount = 0f;
             if (PlayerCameraRig.Instance != null) PlayerCameraRig.Instance.SetChargeShake(0f);
+            if (_lastFxLevel != 0)
+            {
+                _lastFxLevel = 0;
+                SendServerRpc(nameof(CmdSetChargeFx), 0);
+            }
+        }
+
+        [NetRpc]
+        private void CmdSetChargeFx(int level)
+        {
+            // 仅服务器执行：写 NetVar 广播全端驱动蓄力特效。
+            _chargeFxLevel.Value = Mathf.Clamp(level, 0, 16);
         }
 
         [NetRpc]
