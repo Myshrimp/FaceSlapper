@@ -3,6 +3,7 @@ using FaceSlapper.Input;
 using FaceSlapper.Match;
 using FaceSlapper.Network;
 using FaceSlapper.Room;
+using FaceSlapper.UI;
 using UnityEngine;
 
 namespace FaceSlapper.Core
@@ -23,6 +24,7 @@ namespace FaceSlapper.Core
             gm.AddAndRegister<PoolComponent>();
             gm.AddAndRegister<StateMachineManager>();
             gm.AddAndRegister<InputComponent>();
+            gm.AddAndRegister<UIComponent>();
             gm.AddAndRegister<NetworkComponent>();
             gm.AddAndRegister<TickComponent>();
             gm.AddAndRegister<SceneManagementComponent>();
