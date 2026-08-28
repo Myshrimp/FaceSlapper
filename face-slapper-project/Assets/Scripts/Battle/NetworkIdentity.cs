@@ -121,10 +121,6 @@ namespace FaceSlapper.Battle
 
             // 广播命中表现（音效/粒子）给所有观察者。
             SendObserversRpc(nameof(RpcHitFeedback), victim.transform.position, direction, force);
-
-            // 命中经服务器校验有效，通知对局管理器计分。
-            if (MatchComponent.ServerInstance != null)
-                MatchComponent.ServerInstance.NotifyHitConfirmed(PlayerId.Value, victimIdentity.PlayerId.Value);
         }
 
         /// <summary>在受害者的 Owner 端执行击飞（该端是移动的权威端）。</summary>
@@ -163,10 +159,6 @@ namespace FaceSlapper.Battle
 
             // 广播命中表现（音效/粒子）给所有观察者。
             SendObserversRpc(nameof(RpcHitFeedback), victim.transform.position, direction, force);
-
-            // 命中经服务器校验有效，通知对局管理器计分。
-            if (MatchComponent.ServerInstance != null)
-                MatchComponent.ServerInstance.NotifyHitConfirmed(PlayerId.Value, victimIdentity.PlayerId.Value);
         }
 
         /// <summary>在受害者的 Owner 端执行重击击飞（该端是移动的权威端）。</summary>

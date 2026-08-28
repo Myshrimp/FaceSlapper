@@ -37,8 +37,8 @@ namespace FaceSlapper.Core
         {
             if (!IsOpen) return;
 
-            const float width = 680f;
-            const float height = 320f;
+            const float width = 720f;
+            const float height = 480f;
             GUILayout.BeginArea(new Rect(10, Screen.height - height - 10, width, height), GUI.skin.box);
 
             // 快捷命令按钮：GUILayout 流式布局，不再用绝对 Rect 覆盖日志区。
@@ -55,18 +55,6 @@ namespace FaceSlapper.Core
             }
             GUILayout.EndHorizontal();
 
-            // 有新日志时自动滚动到底部。
-            if (_lines.Count != _lastLineCount)
-            {
-                _lastLineCount = _lines.Count;
-                _scroll.y = float.MaxValue;
-            }
-
-            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
-            for (int i = 0; i < _lines.Count; i++)
-                GUILayout.Label(_lines[i]);
-            GUILayout.EndScrollView();
-
             GUI.SetNextControlName("GMInput");
             _input = GUILayout.TextField(_input, GUILayout.Height(24));
             if (_focusRequested)
@@ -82,6 +70,18 @@ namespace FaceSlapper.Core
             }
 
             GUILayout.Label("格式: /gm func MethodName arg1 arg2（` 关闭，回车执行）");
+
+            // 有新日志时自动滚动到底部。
+            if (_lines.Count != _lastLineCount)
+            {
+                _lastLineCount = _lines.Count;
+                _scroll.y = float.MaxValue;
+            }
+
+            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
+            for (int i = 0; i < _lines.Count; i++)
+                GUILayout.Label(_lines[i]);
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 

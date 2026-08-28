@@ -40,4 +40,25 @@ namespace FaceSlapper.Core
     {
         public Vector3 Position;
     }
+
+    public struct PlayerDeathEvent
+    {
+        public int VictimNetId;
+        public int KillerId;
+    }
+
+    public struct EnterModeEvent
+    {
+        public EnterModeEvent(string modeId, string name, int playerCount, int gameLength)
+        {
+            ModeId = modeId;
+            DisplayName = name;
+            PlayerCount = playerCount;
+            GameLength = gameLength;
+        }
+        public string ModeId;
+        public string DisplayName;
+        public int PlayerCount;
+        public int GameLength;
+    }
 }

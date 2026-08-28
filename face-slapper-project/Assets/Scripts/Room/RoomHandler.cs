@@ -98,5 +98,10 @@ namespace FaceSlapper.Room
             Debug.Log(result);
             return result;
         }
+
+        public int GetPlayersCount()
+        {
+            return _room.Players.Count;
+        }
     }
 }

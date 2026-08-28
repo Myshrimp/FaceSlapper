@@ -86,35 +86,16 @@ namespace FaceSlapper.Core
             return Match.SelectMode(modeId) ? $"已请求选择模式 {modeId}" : "失败：未连接网络";
         }
 
-        /// <summary>注册本机玩家到对局（需已选择模式）。用法: RegisterPlayer</summary>
-        public string RegisterPlayer()
+        public string VoteForMode(string modeId)
         {
-            return Match.Register() ? "已请求注册本机玩家" : "失败：未连接网络";
+            return Match.VoteFor(modeId) ? $"已请求投票模式 {modeId}" : "失败：未连接网络";
         }
 
-        /// <summary>注销本机玩家。用法: UnregisterPlayer</summary>
-        public string UnregisterPlayer()
+        public string VoteForMode()
         {
-            return Match.Unregister() ? "已请求注销本机玩家" : "失败：未连接网络";
+            return Match.VoteFor("DeathMatch") ? $"已请求投票模式 DeathMatch" : "失败：未连接网络";
         }
 
-        /// <summary>开始对局。用法: StartMatch</summary>
-        public string StartMatch()
-        {
-            return Match.StartMatch() ? "开始指令已发送" : "失败：未连接网络或找不到 MatchComponent";
-        }
-
-        /// <summary>结束对局（按当前比分结算）。用法: EndMatch</summary>
-        public string EndMatch()
-        {
-            return Match.EndMatch() ? "结束指令已发送" : "失败：未连接网络";
-        }
-
-        /// <summary>打印当前对局信息。用法: MatchInfo</summary>
-        public string MatchInfo()
-        {
-            return Match.MatchInfo();
-        }
 
         /// <summary>写一条日志。用法: Log hello</summary>
         public string Log(string msg)
