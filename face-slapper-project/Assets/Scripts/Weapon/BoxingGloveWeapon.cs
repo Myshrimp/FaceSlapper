@@ -229,6 +229,11 @@ namespace FaceSlapper.Weapon
                 attacker.ReportLaunch(nob.NetId, dir, force, _upRatio, _airTime, _hitRadius + 2f, _stunDuration);
                 OnHitPlayer(victim);
 
+                // 击飞位移预测：本地命中立即让敌人镜像飞出（只预测位移，不预测状态）；
+                // 权威击飞与眩晕仍走 服务器 → 受害者 Owner 链路。
+                Movement victimMove = nob.GetComponent<Movement>();
+                if (victimMove != null) victimMove.PredictLaunch(dir, force, _upRatio, _airTime);
+
                 // 命中敌人：相机强烈抖动（强度随蓄力缩放），仅攻击者本端触发。
                 if (PlayerCameraRig.Instance != null)
                     PlayerCameraRig.Instance.HitShake(Mathf.Lerp(0.6f, 1f, _lastCharge));

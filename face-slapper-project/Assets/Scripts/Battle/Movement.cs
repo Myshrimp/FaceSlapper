@@ -48,6 +48,13 @@ namespace FaceSlapper.Battle
         private bool _jumpQueued;   // Update 中缓存跳跃输入，状态机 Tick 时消费，避免低物理频率下丢输入。
         private float _stunDuration = 1.6f;
 
+        // 击飞位移预测（仅非 Owner 端）：攻击者本地命中立即表现敌人位移，
+        // 不预测任何状态（眩晕/状态机仍等服务器链路）。
+        private NetTransformSync _transformSync;
+        private bool _predictingLaunch;
+        private Vector3 _predictedVelocity;
+        private float _predictedTimer;
+
         // 冲刺（拳套蓄力冲拳带动持有者前冲）。
         private float _dashTimer;
         private Vector3 _dashDir;
@@ -81,6 +88,7 @@ namespace FaceSlapper.Battle
             _squashDriver = GetComponent<SlimeSquashDriver>();
             _buffs = GetComponent<BuffComponent>();
             _fsm = GetComponent<PlayerFsmComponent>();
+            _transformSync = GetComponent<NetTransformSync>();
             _netObject = GetComponent<NetObject>();
             _netObject.OnSpawnServer += RefreshKinematic;
             _netObject.OnSpawnClient += RefreshKinematic;
@@ -108,6 +116,7 @@ namespace FaceSlapper.Battle
 
         private void OnOwnershipChanged(bool isOwner)
         {
+            StopPrediction();
             RefreshKinematic();
             if (isOwner)
             {
@@ -122,6 +131,7 @@ namespace FaceSlapper.Battle
 
         private void OnDespawnClient()
         {
+            StopPrediction();
             if (LocalInstance == this)
             {
                 LocalInstance = null;
@@ -259,6 +269,76 @@ namespace FaceSlapper.Battle
         public void EndDash()
         {
             _dashTimer = 0f;
+        }
+
+        // ---------------- 击飞位移预测（仅非 Owner 端） ----------------
+
+        /// <summary>
+        /// 击飞位移预测：攻击者本地命中敌人时立即调用，让敌人的本地镜像立刻飞出。
+        /// 只模拟弹道位移（水平匀速 + 竖直重力），不改任何状态——
+        /// 眩晕/状态机/Buff 仍等受害者 Owner → 服务器的权威链路；
+        /// 权威击飞经 NetTransformSync 到达后预测结束，平滑混合回同步流。
+        /// </summary>
+        public void PredictLaunch(Vector3 direction, float force, float upRatio, float airTime)
+        {
+            if (_netObject == null || !_netObject.IsSpawned || _netObject.IsOwner) return;
+
+            Vector3 flat = direction;
+            flat.y = 0f;
+            if (flat.sqrMagnitude < 0.001f) flat = transform.forward;
+            flat.Normalize();
+
+            _predictedVelocity = (flat + Vector3.up * upRatio).normalized * force;
+            _predictedTimer = airTime;
+            _predictingLaunch = true;
+            if (_transformSync != null) _transformSync.PredictionActive = true;
+            // 史莱姆受击拉伸脉冲（与权威端一致的表现）。
+            if (_squashDriver != null) _squashDriver.PulseSquash(0.9f);
+        }
+
+        /// <summary>结束位移预测：交还 NetTransformSync 插值（自动平滑混合）。</summary>
+        private void StopPrediction()
+        {
+            if (!_predictingLaunch) return;
+            _predictingLaunch = false;
+            if (_transformSync != null) _transformSync.PredictionActive = false;
+        }
+
+        private void FixedUpdate()
+        {
+            if (!_predictingLaunch) return;
+
+            // 变成 Owner（所有权迁移）或对象消失时立即终止预测。
+            if (_netObject == null || !_netObject.IsSpawned || _netObject.IsOwner)
+            {
+                StopPrediction();
+                return;
+            }
+
+            float dt = Time.fixedDeltaTime;
+            _predictedTimer -= dt;
+            _predictedVelocity += Physics.gravity * dt;
+
+            Vector3 step = _predictedVelocity * dt;
+
+            // 扫掠检测：撞上障碍（非玩家、非地面）时提前结束预测，
+            // 与 Owner 端 OnCollisionEnter 的撞墙判定一致，防止预测穿墙；
+            // 此处只停位移，眩晕表现仍等服务器 NetVar。
+            if (_rb.SweepTest(step.normalized, out RaycastHit hit, step.magnitude))
+            {
+                bool isPlayer = hit.collider.GetComponentInParent<NetworkIdentity>() != null;
+                if (!isPlayer && hit.normal.y < _groundNormalY)
+                {
+                    StopPrediction();
+                    return;
+                }
+            }
+
+            _rb.MovePosition(transform.position + step);
+
+            // 落地或滞空时间耗尽：结束预测。
+            if (_predictedTimer <= 0f || (_predictedVelocity.y < 0f && IsGrounded()))
+                StopPrediction();
         }
 
         /// <summary>清除碰撞带来的残余角速度（双保险，Prefab 上已冻结旋转）。</summary>
