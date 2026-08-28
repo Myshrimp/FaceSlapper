@@ -8,7 +8,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using TopDownCamera = FaceSlapper.Camera.TopDownCamera;
+using PlayerCameraRig = FaceSlapper.Camera.PlayerCameraRig;
 using Object = UnityEngine.Object;
 
 namespace FaceSlapper.EditorTools
@@ -417,7 +417,7 @@ namespace FaceSlapper.EditorTools
             camGo.transform.rotation = Quaternion.Euler(56f, 0f, 0f);
             camGo.AddComponent<UnityEngine.Camera>();
             camGo.AddComponent<AudioListener>();
-            camGo.AddComponent<TopDownCamera>();
+            camGo.AddComponent<PlayerCameraRig>();
         }
 
         private static void CreateLight()

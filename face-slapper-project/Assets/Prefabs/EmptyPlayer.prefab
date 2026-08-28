@@ -59,7 +59,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 66b7321221806e046821ae194a3d5931, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MainTimeline:
+  GlobalMainTimeline:
     StartPoint: 0
     CurTick: 0
     CurPredictedTick: 0
@@ -99,7 +99,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584137857695085525
+  _initializedTimestamp: -8584137258248776338
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1

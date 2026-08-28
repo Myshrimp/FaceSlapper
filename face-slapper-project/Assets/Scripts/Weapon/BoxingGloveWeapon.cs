@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using FaceSlapper.Battle;
+using FaceSlapper.Camera;
 using FaceSlapper.Networking;
 using UnityEngine;
 
@@ -101,6 +102,8 @@ namespace FaceSlapper.Weapon
             _charge = Mathf.Clamp01(_charge + Time.deltaTime / _chargeTime);
             // 蓄力后拉表现（Owner 每帧驱动武器变换，经 NetTransformSync 全端可见）。
             if (Anim != null) Anim.ChargeAmount = _charge;
+            // 蓄力期间相机轻微持续抖动（随蓄力进度增强）。
+            if (PlayerCameraRig.Instance != null) PlayerCameraRig.Instance.SetChargeShake(_charge);
         }
 
         private void CancelCharge()
@@ -108,6 +111,7 @@ namespace FaceSlapper.Weapon
             _charging = false;
             _charge = 0f;
             if (Anim != null) Anim.ChargeAmount = 0f;
+            if (PlayerCameraRig.Instance != null) PlayerCameraRig.Instance.SetChargeShake(0f);
         }
 
         [NetRpc]
@@ -187,6 +191,10 @@ namespace FaceSlapper.Weapon
 
                 attacker.ReportLaunch(nob.NetId, dir, force, _upRatio, _airTime, _hitRadius + 2f, _stunDuration);
                 OnHitPlayer(victim);
+
+                // 命中敌人：相机强烈抖动（强度随蓄力缩放），仅攻击者本端触发。
+                if (PlayerCameraRig.Instance != null)
+                    PlayerCameraRig.Instance.HitShake(Mathf.Lerp(0.6f, 1f, _lastCharge));
 
                 // 命中急停：冲刺在撞到敌人时停下（末日铁拳手感）。
                 Movement move = holder.GetComponent<Movement>();

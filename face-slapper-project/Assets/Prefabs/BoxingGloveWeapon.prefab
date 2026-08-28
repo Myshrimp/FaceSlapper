@@ -132,11 +132,11 @@ MonoBehaviour:
   _tip: {fileID: 5685431732800581825}
   _chargeTime: 0.9
   _minDashSpeed: 8
-  _maxDashSpeed: 30
-  _dashDuration: 0.8
+  _maxDashSpeed: 20
+  _dashDuration: 0.28
   _minForce: 10
   _maxForce: 22
-  _upRatio: 0.2
+  _upRatio: 0.8
   _airTime: 0.8
   _stunDuration: 1.6
   _hitRadius: 1.2
@@ -201,7 +201,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584139825990800865
+  _initializedTimestamp: -8584137258029163256
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
