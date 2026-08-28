@@ -132,7 +132,7 @@ namespace FaceSlapper.Battle
         private void TargetApplyKnockback(Vector3 direction, float force)
         {
             var movement = GetComponent<Movement>();
-            if (movement != null) movement.ApplyKnockback(direction, force);
+            if (movement != null) movement.ApplyLaunch(LaunchEffect.Slap(direction, force));
             EventBus.Publish(new PlayerHitEvent { VictimNetId = NetObj.NetId, Direction = direction, Force = force });
         }
 
@@ -175,10 +175,7 @@ namespace FaceSlapper.Battle
         {
             var movement = GetComponent<Movement>();
             if (movement != null)
-            {
-                movement.ApplyLaunch(direction, force, upRatio, airTime);
-                movement.SetStunDuration(stunDuration);
-            }
+                movement.ApplyLaunch(LaunchEffect.GlovePunch(direction, force, upRatio, airTime, stunDuration));
             EventBus.Publish(new PlayerHitEvent { VictimNetId = NetObj.NetId, Direction = direction, Force = force });
         }
     }

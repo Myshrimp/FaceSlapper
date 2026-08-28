@@ -24,8 +24,8 @@ namespace FaceSlapper.Battle
         [SerializeField] private float _turnSpeed = 720f;
 
         [Header("击飞")]
+        [Tooltip("失控时间下限（秒），实际失控时间取击飞效果 AirTime 与该值的较大者")]
         [SerializeField] private float _knockbackRecoverTime = 0.35f;
-        [SerializeField] private float _knockbackUpRatio = 0.5f;
 
         [Tooltip("接触点平均法线 Y 大于该值视为地面/可站立面，不触发眩晕")]
         [SerializeField] private float _groundNormalY = 0.7f;
@@ -278,22 +278,19 @@ namespace FaceSlapper.Battle
         /// 只模拟弹道位移（水平匀速 + 竖直重力），不改任何状态——
         /// 眩晕/状态机/Buff 仍等受害者 Owner → 服务器的权威链路；
         /// 权威击飞经 NetTransformSync 到达后预测结束，平滑混合回同步流。
+        /// 与权威执行共享 LaunchEffect 参数，两端手感一致。
         /// </summary>
-        public void PredictLaunch(Vector3 direction, float force, float upRatio, float airTime)
+        public void PredictLaunch(LaunchEffect effect)
         {
             if (_netObject == null || !_netObject.IsSpawned || _netObject.IsOwner) return;
+            if (effect == null) return;
 
-            Vector3 flat = direction;
-            flat.y = 0f;
-            if (flat.sqrMagnitude < 0.001f) flat = transform.forward;
-            flat.Normalize();
-
-            _predictedVelocity = (flat + Vector3.up * upRatio).normalized * force;
-            _predictedTimer = airTime;
+            _predictedVelocity = effect.Impulse(transform.forward);
+            _predictedTimer = effect.AirTime;
             _predictingLaunch = true;
             if (_transformSync != null) _transformSync.PredictionActive = true;
             // 史莱姆受击拉伸脉冲（与权威端一致的表现）。
-            if (_squashDriver != null) _squashDriver.PulseSquash(0.9f);
+            if (_squashDriver != null) _squashDriver.PulseSquash(effect.SquashIntensity);
         }
 
         /// <summary>结束位移预测：交还 NetTransformSync 插值（自动平滑混合）。</summary>
@@ -357,45 +354,23 @@ namespace FaceSlapper.Battle
 
         // ---------------- 外部施加的击飞/眩晕 ----------------
 
-        /// <summary>施加击飞冲量（仅 Owner 端有效）。</summary>
-        public void ApplyKnockback(Vector3 direction, float force)
-        {
-            if (!_netObject.IsOwner) return;
-
-            Vector3 flat = direction;
-            flat.y = 0f;
-            if (flat.sqrMagnitude < 0.001f) flat = transform.forward;
-            flat.Normalize();
-
-            Vector3 impulse = (flat + Vector3.up * _knockbackUpRatio).normalized * force;
-            _knockbackTimer = _knockbackRecoverTime;
-            _rb.AddForce(impulse, ForceMode.VelocityChange);
-            // 史莱姆受击拉伸脉冲。
-            if (_squashDriver != null) _squashDriver.PulseSquash(0.5f);
-        }
-
         /// <summary>
-        /// 施加重击击飞（拳套）：更高的抛起分量 + 更长的失控时间，
-        /// 飞行途中撞到障碍物（非玩家、非地面）会陷入眩晕（见 OnCollisionEnter）。
-        /// 仅 Owner 端有效。
+        /// 施加击飞（仅 Owner 端有效）：普通拍击与拳套重击的统一入口，
+        /// 效果参数见 LaunchEffect（与位移预测共享同一组参数）。
+        /// 重击（Heavy）进入 Launched 状态，飞行途中撞墙陷入眩晕（见 OnCollisionEnter）。
         /// </summary>
-        public void ApplyLaunch(Vector3 direction, float force, float upRatio, float airTime)
+        public void ApplyLaunch(LaunchEffect effect)
         {
-            if (!_netObject.IsOwner) return;
+            if (!_netObject.IsOwner || effect == null) return;
 
-            Vector3 flat = direction;
-            flat.y = 0f;
-            if (flat.sqrMagnitude < 0.001f) flat = transform.forward;
-            flat.Normalize();
-
-            Vector3 impulse = (flat + Vector3.up * upRatio).normalized * force;
-            _knockbackTimer = Mathf.Max(airTime, _knockbackRecoverTime);
-            _isLaunched = true;
-            _rb.AddForce(impulse, ForceMode.VelocityChange);
-            // 史莱姆重击拉伸脉冲（更强）。
-            if (_squashDriver != null) _squashDriver.PulseSquash(0.9f);
-            // 驱动状态机进入重击飞行状态。
-            if (_fsm != null) _fsm.Fire(PlayerFsmComponent.LaunchTrigger);
+            _knockbackTimer = Mathf.Max(effect.AirTime, _knockbackRecoverTime);
+            _isLaunched = effect.Heavy;
+            if (effect.StunDuration > 0f) _stunDuration = effect.StunDuration;
+            _rb.AddForce(effect.Impulse(transform.forward), ForceMode.VelocityChange);
+            // 史莱姆受击拉伸脉冲。
+            if (_squashDriver != null) _squashDriver.PulseSquash(effect.SquashIntensity);
+            // 重击驱动状态机进入重击飞行状态；轻击退留在正常状态走弱空控。
+            if (effect.Heavy && _fsm != null) _fsm.Fire(PlayerFsmComponent.LaunchTrigger);
         }
 
         /// <summary>
@@ -449,11 +424,6 @@ namespace FaceSlapper.Battle
             Vector3 origin = transform.position + Vector3.up * 0.05f;
             return Physics.Raycast(origin, Vector3.down, _groundCheckDistance + 0.05f,
                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-        }
-
-        public void SetStunDuration(float dur)
-        {
-            _stunDuration = dur;
         }
     }
 }

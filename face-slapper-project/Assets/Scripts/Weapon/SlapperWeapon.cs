@@ -43,6 +43,10 @@ namespace FaceSlapper.Weapon
 
                 attacker.ReportHit(nob.NetId, dir, _force, 6f);
                 OnHitPlayer(victim);
+
+                // 击飞位移预测：本地命中立即表现（与拳套共享 LaunchEffect 流程，预测位移不预测状态）。
+                Movement victimMove = nob.GetComponent<Movement>();
+                if (victimMove != null) victimMove.PredictLaunch(LaunchEffect.Slap(dir, _force));
             }
         }
     }
