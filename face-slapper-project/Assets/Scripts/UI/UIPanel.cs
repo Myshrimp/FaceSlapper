@@ -10,8 +10,10 @@ namespace FaceSlapper.UI
     /// </summary>
     public abstract class UIPanel : MonoBehaviour
     {
-        /// <summary>面板所属层级，默认 Normal；子类按需重写（如弹窗返回 UILayer.Popup）。</summary>
-        public virtual UILayer Layer => UILayer.Normal;
+        [SerializeField] private UILayer _layer = UILayer.Normal;
+
+        /// <summary>面板所属层级（Inspector 可配置），默认 Normal；子类也可重写该属性强制层级。</summary>
+        public virtual UILayer Layer => _layer;
 
         /// <summary>是否处于打开状态。</summary>
         public bool IsOpen { get; private set; }

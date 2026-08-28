@@ -56,7 +56,8 @@ namespace FaceSlapper.UI
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 射线检测集中在根 Canvas，层级子节点只负责排序，无需各自挂 Raycaster。
+            // 根 Canvas 上的 Raycaster 只负责直接挂在根下的图形；
+            // 层级子 Canvas 的射线检测由 UIManager 在各层节点上分别挂 GraphicRaycaster。
             if (go.GetComponent<GraphicRaycaster>() == null)
                 go.AddComponent<GraphicRaycaster>();
 
@@ -67,7 +68,9 @@ namespace FaceSlapper.UI
         /// <summary>确保场景中存在 EventSystem（点击/拖拽/滚轮事件的分发入口）。</summary>
         private void CreateEventSystem()
         {
-            if (EventSystem.current != null) return;
+            // 不能用 EventSystem.current 判断：本组件由 GameEntry（DefaultExecutionOrder -50）
+            // 在场景 EventSystem OnEnable 之前初始化，此时 current 仍为 null，会误判重复创建。
+            if (FindObjectOfType<EventSystem>() != null) return;
 
             GameObject go = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
             DontDestroyOnLoad(go);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace FaceSlapper.UI
 {
@@ -33,7 +34,10 @@ namespace FaceSlapper.UI
             if (_layers.TryGetValue(layer, out RectTransform node) && node != null)
                 return node;
 
-            GameObject go = new GameObject($"Layer_{layer}", typeof(RectTransform), typeof(Canvas));
+            // 注意：GraphicRaycaster 必须挂在每个层级子 Canvas 上——
+            // uGUI 按"最近的 Canvas"注册 Graphic 的射线目标，根 Canvas 上的
+            // GraphicRaycaster 检测不到嵌套子 Canvas 里的图形。
+            GameObject go = new GameObject($"Layer_{layer}", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
             node = (RectTransform)go.transform;
             node.SetParent(_root, false);
             node.anchorMin = Vector2.zero;

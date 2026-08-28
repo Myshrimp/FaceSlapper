@@ -15,6 +15,9 @@ namespace FaceSlapper.Core
     [DefaultExecutionOrder(-50)]
     public class GameEntry : MonoBehaviour
     {
+        [Tooltip("游戏启动时自动打开的 UI 面板预制体（如大厅面板），可留空。")]
+        [SerializeField] private UIPanel[] _startupPanels = new UIPanel[0];
+
         private void Awake()
         {
             GameManager gm = GameManager.Instance;
@@ -37,8 +40,12 @@ namespace FaceSlapper.Core
             if (gm.GetComponent<GMConsole>() == null)
                 gm.gameObject.AddComponent<GMConsole>();
 
-            // 大厅面板：接管 Host/Join/开始游戏 的 UI 入口（纯代码构建，无需预制体）。
-            LobbyPanel.Open();
+            // 启动面板：在 Inspector 中配置面板预制体（如大厅），启动时经 UIManager 打开。
+            UIComponent ui = gm.Get<UIComponent>();
+            for (int i = 0; i < _startupPanels.Length; i++)
+            {
+                if (_startupPanels[i] != null) ui.Manager.Open(_startupPanels[i]);
+            }
         }
     }
 }
