@@ -15,6 +15,11 @@ GameObject:
   - component: {fileID: 8620604434721246896}
   - component: {fileID: 4965017575996648495}
   - component: {fileID: 7387396355252419290}
+  - component: {fileID: 8781941062800178793}
+  - component: {fileID: 7067268473992379726}
+  - component: {fileID: 2899396000240658324}
+  - component: {fileID: 918611993371826153}
+  - component: {fileID: 7092164007710823048}
   - component: {fileID: 2002118081657060366}
   - component: {fileID: 7052251033494454387}
   - component: {fileID: 746304288675546306}
@@ -130,17 +135,12 @@ MonoBehaviour:
   _attackInterval: 0.9
   _attackDuration: 0.3
   _tip: {fileID: 5685431732800581825}
+  _detector: {fileID: 0}
   _chargeTime: 0.9
   _minDashSpeed: 8
   _maxDashSpeed: 20
   _dashDuration: 0.28
-  _minForce: 10
-  _maxForce: 22
-  _upRatio: 0.8
-  _airTime: 0.8
-  _stunDuration: 1.6
-  _hitRadius: 1.2
-  _chargeFxPrefab: {fileID: 500000000000000003, guid: a1b2c3d4e5f60718293a4b5c6d7e8f06, type: 3}
+  _chargeFxPrefab: {fileID: 0}
 --- !u!114 &7387396355252419290
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -158,6 +158,79 @@ MonoBehaviour:
   _swingAngle: -80
   _lungeDistance: 0.6
   _chargePullBack: 0.4
+--- !u!114 &8781941062800178793
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 86611635948841856}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0bf4c7bfdc430b34c8b4280f2769a30a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _offset: {x: 0, y: 0, z: 0}
+  _layerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  _radius: 1.2
+--- !u!114 &7067268473992379726
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 86611635948841856}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 074b5274040f85b4fbc98043bcaa208e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &2899396000240658324
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 86611635948841856}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76c719b8ffe4e824abb6c2238e6362b5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _minForce: 10
+  _maxForce: 22
+  _upRatio: 0.8
+  _airTime: 0.8
+  _stunDuration: 1.6
+  _serverMaxRange: 3.2
+--- !u!114 &918611993371826153
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 86611635948841856}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a467078d10207dd499049c05a6ac7504, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _minIntensity: 0.6
+  _maxIntensity: 1
+--- !u!114 &7092164007710823048
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 86611635948841856}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fce618e472d9794ea109c37336695d8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!114 &2002118081657060366
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -172,6 +245,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _sendInterval: 0.05
   _interpolationDelay: 0.1
+  _blendDuration: 0.12
 --- !u!114 &7052251033494454387
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -190,8 +264,7 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours:
-  - {fileID: 746304288675546306}
+  NetworkBehaviours: []
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -202,7 +275,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584137258029163256
+  _initializedTimestamp: 0
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -221,15 +294,15 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 0
+  <PrefabId>k__BackingField: 65535
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 1625952319693946593
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-    Scale: {x: 1, y: 1, z: 1}
-    IsValid: 1
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
 --- !u!114 &746304288675546306
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -242,9 +315,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7a902ff4108854d4d9c642fe420f457d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 0
+  _componentIndexCache: 255
   _addedNetworkObject: {fileID: 7052251033494454387}
-  _networkObjectCache: {fileID: 7052251033494454387}
+  _networkObjectCache: {fileID: 0}
 --- !u!1 &2803332401969693614
 GameObject:
   m_ObjectHideFlags: 0

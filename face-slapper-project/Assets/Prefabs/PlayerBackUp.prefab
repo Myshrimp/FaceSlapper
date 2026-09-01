@@ -142,7 +142,6 @@ MonoBehaviour:
   _moveSpeed: 6
   _turnSpeed: 720
   _knockbackRecoverTime: 0.35
-  _knockbackUpRatio: 0.5
   _groundNormalY: 0.7
   _jumpSpeed: 7
   _groundCheckDistance: 0.15
@@ -229,6 +228,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _sendInterval: 0.05
   _interpolationDelay: 0.1
+  _blendDuration: 0.12
 --- !u!114 &6020900181092247031
 MonoBehaviour:
   m_ObjectHideFlags: 0

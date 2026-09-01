@@ -170,5 +170,23 @@ namespace FaceSlapper.Battle
                 movement.ApplyLaunch(LaunchEffect.GlovePunch(direction, force, upRatio, airTime, stunDuration));
             EventBus.Publish(new PlayerHitEvent { VictimNetId = NetObj.NetId, Direction = direction, Force = force });
         }
+
+        /// <summary>
+        /// 服务器端转发入口（武器侧 EffectManager 的独立同步链路复用）：
+        /// 把轻击退转发给本对象的 Owner 端执行。仅服务器调用。
+        /// </summary>
+        internal void ServerForwardKnockback(Vector3 direction, float force)
+        {
+            SendTargetRpc(NetObj.OwnerClientId, nameof(TargetApplyKnockback), direction, force);
+        }
+
+        /// <summary>
+        /// 服务器端转发入口（武器侧 EffectManager 的独立同步链路复用）：
+        /// 把重击击飞转发给本对象的 Owner 端执行。仅服务器调用。
+        /// </summary>
+        internal void ServerForwardLaunch(Vector3 direction, float force, float upRatio, float airTime, float stunDuration)
+        {
+            SendTargetRpc(NetObj.OwnerClientId, nameof(TargetApplyLaunch), direction, force, upRatio, airTime, stunDuration);
+        }
     }
 }

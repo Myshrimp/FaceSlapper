@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FaceSlapper.Battle;
 using FaceSlapper.Networking;
 using UnityEngine;
@@ -14,6 +15,10 @@ namespace FaceSlapper.Weapon
     ///   Owner 输入 OnAttack → 服务器冷却校验 → 攻击序号 NetVar 自增（广播全端）
     ///   → 各端 WeaponFsmComponent 切入 Attack 状态 → WeaponAnimComponent 播动画，
     ///   Owner 端在状态进入时做命中检测（DoHitCheck）。
+    /// 命中与效果（组件组合）：
+    ///   HitDetector（球/方/射线检测器）负责范围查询与过滤，
+    ///   WeaponEffectManager 收集本武器所有 WeaponEffect 逐目标应用并独立做网络同步，
+    ///   武器子类只保留自身特有行为（如拳套蓄力），新武器 = 检测器 + Effect 组合。
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(WeaponFsmComponent))]
@@ -30,6 +35,10 @@ namespace FaceSlapper.Weapon
         [Tooltip("攻击判定点（武器尖端）。不设置则用持有者面前位置。")]
         [SerializeField] protected Transform _tip;
 
+        [Header("命中")]
+        [Tooltip("命中检测器（球/方/射线等可复用组件）。不设置则取本物体上的 HitDetector。")]
+        [SerializeField] protected HitDetector _detector;
+
         /// <summary>攻击状态时长（攻击状态据此自动回到待机）。</summary>
         public float AttackDuration => _attackDuration;
 
@@ -45,11 +54,17 @@ namespace FaceSlapper.Weapon
         protected Rigidbody _rb;
         private WeaponFsmComponent _fsm;
         private WeaponAnimComponent _anim;
+        private WeaponEffectManager _effectManager;
+        private readonly HitResult[] _hitBuffer = new HitResult[32];
+        private readonly HashSet<int> _hitVictims = new HashSet<int>(8);  // 单次攻击已命中的目标
         private float _lastAttackTime = float.NegativeInfinity;
         private float _serverLastAttackTime = float.NegativeInfinity;
 
         /// <summary>动画组件（子类做蓄力表现/强度缩放用）。</summary>
         protected WeaponAnimComponent Anim => _anim;
+
+        /// <summary>本次攻击的效果强度 0-1（蓄力武器重写返回蓄力等级，非蓄力武器恒为 0）。</summary>
+        protected virtual float CurrentPower => 0f;
 
         /// <summary>本地冷却是否就绪（Owner 端输入预判）。</summary>
         protected bool LocalAttackReady => Time.time - _lastAttackTime >= _attackInterval;
@@ -80,6 +95,12 @@ namespace FaceSlapper.Weapon
             _rb = GetComponent<Rigidbody>();
             _fsm = GetComponent<WeaponFsmComponent>();
             _anim = GetComponent<WeaponAnimComponent>();
+            _effectManager = GetComponent<WeaponEffectManager>();
+            if (_detector == null) _detector = GetComponent<HitDetector>();
+            if (_effectManager == null)
+                Debug.LogWarning($"[Weapon] {name} 缺少 WeaponEffectManager 组件，命中将无效果。");
+            if (_detector == null)
+                Debug.LogWarning($"[Weapon] {name} 缺少 HitDetector 组件，将无法做命中检测。");
             _holderNobId.OnChange += (prev, next) => ApplyHolderState();
             _attackSeq.OnChange += (prev, next) => { if (next > prev) OnAttackBroadcast(); };
         }
@@ -233,13 +254,25 @@ namespace FaceSlapper.Weapon
 
         /// <summary>
         /// 攻击状态进入（全端，由 WeaponAttackState.OnEnter 调用）：
-        /// 播攻击动画；Owner 端额外做命中检测。
+        /// 清命中记录、播攻击动画；Owner 端额外执行攻击钩子并做命中检测。
         /// </summary>
         internal virtual void HandleAttackStateEnter()
         {
-            if (_anim != null) _anim.Play();
-            if (IsOwner) DoHitCheck();
+            _hitVictims.Clear();
+            PlayAttackAnim();
+            if (!IsOwner) return;
+            OnAttackStateEnterOwner();
+            DoHitCheck();
         }
+
+        /// <summary>播攻击动画（全端）。子类可重写做蓄力强度缩放。</summary>
+        protected virtual void PlayAttackAnim()
+        {
+            if (_anim != null) _anim.Play();
+        }
+
+        /// <summary>攻击状态进入时的 Owner 端钩子（如拳套把持有者送入冲刺），默认无行为。</summary>
+        protected virtual void OnAttackStateEnterOwner() { }
 
         /// <summary>
         /// 攻击状态期间每物理帧调用（WeaponAttackState.OnFixedUpdate）：
@@ -247,8 +280,34 @@ namespace FaceSlapper.Weapon
         /// </summary>
         internal virtual void HandleAttackStateFixedUpdate() { }
 
-        /// <summary>命中检测（仅 Owner 端，攻击状态进入时调用）。</summary>
-        protected abstract void DoHitCheck();
+        /// <summary>
+        /// 命中检测（仅 Owner 端）：检测器查询 → 单次攻击去重 → EffectManager 应用全部效果。
+        /// 武器不再感知具体效果，效果组合由 WeaponEffect 组件决定。
+        /// </summary>
+        protected virtual void DoHitCheck()
+        {
+            if (_detector == null || _effectManager == null) return;
+
+            NetObject holder = FindHolder();
+            if (holder == null) return;
+
+            NetworkIdentity attacker = holder.GetComponent<NetworkIdentity>();
+            if (attacker == null) return;
+
+            var ctx = new HitDetectContext { Holder = holder, Origin = _tip };
+            int count = _detector.Detect(ctx, _hitBuffer);
+
+            // 单次攻击每个目标只命中一次（拳套冲刺持续检测依赖该去重）。
+            int kept = 0;
+            for (int i = 0; i < count; i++)
+            {
+                if (_hitVictims.Add(_hitBuffer[i].Target.NetId))
+                    _hitBuffer[kept++] = _hitBuffer[i];
+            }
+            if (kept == 0) return;
+
+            _effectManager.ApplyHits(holder, attacker, _hitBuffer, kept, CurrentPower);
+        }
 
         public virtual void OnActivate() { }
 

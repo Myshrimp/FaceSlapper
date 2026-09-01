@@ -252,6 +252,14 @@ namespace FaceSlapper.EditorTools
                 SetFloatField(anim, "_duration", 0.22f);
                 SetFloatField(anim, "_swingAngle", -80f);
 
+                // 命中管线：球形检测器 + 轻击退效果 + 效果管理器（独立网络同步）。
+                var detector = root.AddComponent<SphereHitDetector>();
+                SetFloatField(detector, "_radius", 1.4f);
+                root.AddComponent<WeaponEffectManager>();
+                var knockback = root.AddComponent<KnockbackEffect>();
+                SetFloatField(knockback, "_force", 12f);
+                SetFloatField(knockback, "_serverMaxRange", 6f);
+
                 root.AddComponent<NetTransformSync>();
                 Net.Backend.EditorEnsurePrefabComponents(root);
 
@@ -319,6 +327,21 @@ namespace FaceSlapper.EditorTools
                 SetFloatField(anim, "_duration", 0.3f);
                 SetFloatField(anim, "_lungeDistance", 0.6f);
                 SetFloatField(anim, "_chargePullBack", 0.4f);
+
+                // 命中管线：球形检测器 + 重击击飞/相机抖动/命中急停效果 + 效果管理器。
+                var detector = root.AddComponent<SphereHitDetector>();
+                SetFloatField(detector, "_radius", 1.2f);
+                root.AddComponent<WeaponEffectManager>();
+                var launch = root.AddComponent<LaunchKnockbackEffect>();
+                SetFloatField(launch, "_minForce", 10f);
+                SetFloatField(launch, "_maxForce", 22f);
+                SetFloatField(launch, "_upRatio", 0.8f);
+                SetFloatField(launch, "_airTime", 0.8f);
+                SetFloatField(launch, "_stunDuration", 1.6f);
+                // 服务器校验上限 = 检测半径 + 2m（与原 _hitRadius + 2f 逻辑一致）。
+                SetFloatField(launch, "_serverMaxRange", 3.2f);
+                root.AddComponent<HitShakeEffect>();        // 抖动强度默认 0.6 ~ 1（随蓄力缩放）
+                root.AddComponent<StopHolderDashEffect>();
 
                 root.AddComponent<NetTransformSync>();
                 Net.Backend.EditorEnsurePrefabComponents(root);

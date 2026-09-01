@@ -129,6 +129,9 @@ GameObject:
   - component: {fileID: 7229513600847585491}
   - component: {fileID: 4581870885387050229}
   - component: {fileID: 1281290623910308903}
+  - component: {fileID: 535649549431249280}
+  - component: {fileID: 4646228222036493808}
+  - component: {fileID: 27685751266601758}
   - component: {fileID: 2702865694446864604}
   - component: {fileID: 6204558407785344637}
   - component: {fileID: 2095954238962378384}
@@ -244,8 +247,7 @@ MonoBehaviour:
   _attackInterval: 0.6
   _attackDuration: 0.22
   _tip: {fileID: 2731927547533302820}
-  _force: 12
-  _hitRadius: 1.4
+  _detector: {fileID: 0}
 --- !u!114 &1281290623910308903
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -263,6 +265,49 @@ MonoBehaviour:
   _swingAngle: -80
   _lungeDistance: 0.5
   _chargePullBack: 0.35
+--- !u!114 &535649549431249280
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8365453877596396608}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0bf4c7bfdc430b34c8b4280f2769a30a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _offset: {x: 0, y: 0, z: 0}
+  _layerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  _radius: 1.4
+--- !u!114 &4646228222036493808
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8365453877596396608}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 074b5274040f85b4fbc98043bcaa208e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &27685751266601758
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8365453877596396608}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3efec1347e0516a478acc136a9c3a778, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _force: 12
+  _serverMaxRange: 6
 --- !u!114 &2702865694446864604
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -277,6 +322,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _sendInterval: 0.05
   _interpolationDelay: 0.1
+  _blendDuration: 0.12
 --- !u!114 &6204558407785344637
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -295,8 +341,7 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours:
-  - {fileID: 2095954238962378384}
+  NetworkBehaviours: []
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -307,7 +352,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584137258248776338
+  _initializedTimestamp: 0
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -326,15 +371,15 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 6
+  <PrefabId>k__BackingField: 65535
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 6924962289651332427
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-    Scale: {x: 1, y: 1, z: 1}
-    IsValid: 1
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
 --- !u!114 &2095954238962378384
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -347,6 +392,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7a902ff4108854d4d9c642fe420f457d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 0
+  _componentIndexCache: 255
   _addedNetworkObject: {fileID: 6204558407785344637}
-  _networkObjectCache: {fileID: 6204558407785344637}
+  _networkObjectCache: {fileID: 0}
