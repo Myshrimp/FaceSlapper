@@ -143,6 +143,8 @@ MonoBehaviour:
   _turnSpeed: 720
   _knockbackRecoverTime: 0.35
   _knockbackUpRatio: 0.5
+  _jumpSpeed: 7
+  _groundCheckDistance: 0.15
 --- !u!114 &8998801983941916762
 MonoBehaviour:
   m_ObjectHideFlags: 0
