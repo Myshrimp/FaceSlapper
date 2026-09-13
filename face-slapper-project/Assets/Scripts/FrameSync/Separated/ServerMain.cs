@@ -30,6 +30,7 @@ public class ServerMain : NetBehaviour
     public string IP="127.0.0.1";
     public Action<string> GameStateArrivedCb;
     public Action<string> ReceivePlayerInfoCb;
+    public Action<DataMsg> ServerDataArrivedCb;
     private ServerGame game;
 
     public NetworkComponent NetworkComponent => GameManager.Instance.Get<NetworkComponent>();
@@ -56,6 +57,11 @@ public class ServerMain : NetBehaviour
     public void RequestGameData()
     {
         SendServerRpc(nameof(CmdGetGameData));
+    }
+
+    public void RequestClientSendData(string data)
+    {
+        SendServerRpc(nameof(CmdServerReceiveData), data);
     }
 
     private void OnClientConnected(int playerId)
@@ -119,4 +125,39 @@ public class ServerMain : NetBehaviour
             SendObserversRpc(nameof(CmdSyncGameState), GameStateRaw);
         }
     }
+
+    [NetRpc]
+    private void CmdServerReceiveData(string data)
+    {
+        DataMsg dataMsg = JsonConvert.DeserializeObject<DataMsg>(data);
+        game.Handle(dataMsg);
+    }
+
+    [NetRpc]
+    private void CmdClientReceiveData(string data)
+    {
+        DataMsg dataMsg = JsonConvert.DeserializeObject<DataMsg>(data);
+        ServerDataArrivedCb?.Invoke(dataMsg);
+    }
+}
+
+public struct DataMsg
+{
+    public string head;
+    public string body;
+
+    public DataMsg(string head, string body)
+    {
+        this.head = head;
+        this.body = body;
+    }
+}
+
+public struct MsgHead
+{
+    public int fromPlayer;
+    public bool isBroadcast;
+    public int[] toPlayers;
+    public string module;
+    public string eventType;
 }
