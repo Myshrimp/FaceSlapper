@@ -1,13 +1,19 @@
+using System;
+using System.Collections.Generic;
 using FaceSlapper.Core;
+using FaceSlapper.FrameSync.Separated;
+using FaceSlapper.FrameSync.Separated.Test;
 using FaceSlapper.Input;
 using FaceSlapper.Network;
 using UnityEngine;
 using Newtonsoft.Json;
+using FaceSlapper.FrameSync.Separated.Test;
 
 public class GameMain : MonoBehaviour
 {
     public ServerMain ServerMain;
     public PlayerInfo PlayerInfo;
+    public List<TestBase> Tests;
     private GameState GameState;
     private void Awake()
     {
@@ -22,25 +28,20 @@ public class GameMain : MonoBehaviour
         ServerMain = GameObject.FindObjectOfType<ServerMain>();
         ServerMain.GameStateArrivedCb += OnGameStateArrived;
         ServerMain.ReceivePlayerInfoCb += OnAssignId;
+        ServerMain.ServerDataArrivedCb += OnDataArrive;
+
+        for (int i=0;i<Tests.Count;i++)
+        {
+            Type t = Type.GetType($"FaceSlapper.FrameSync.Separated.Test.{Tests[i].Name}");
+            Tests[i] = Activator.CreateInstance(t) as TestBase;
+            Tests[i].OnAwake(this);
+        }
     }
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Q) && !ServerMain.ServerStarted)
+        foreach (var test in Tests)
         {
-            ServerMain.ServerStarted = true;
-            ServerMain.NetworkComponent.StartHost();
-            Debug.Log("Server main started");
-        }
-        if (Input.GetKeyDown(KeyCode.R) && !ServerMain.ClientStarted)
-        {
-            ServerMain.ClientStarted = true;
-            ServerMain.NetworkComponent.StartClient(ServerMain.IP);
-            Debug.Log("Client started");
-        }
-        if(Input.GetKeyDown(KeyCode.Space))
-        {
-            ServerMain.RequestGameData();
-            Debug.Log("GameReady,requesting data");
+            test.OnUpdate();
         }
     }
 
@@ -55,6 +56,19 @@ public class GameMain : MonoBehaviour
     {
         PlayerInfo = JsonConvert.DeserializeObject<PlayerInfo>(info);
         EventBus.Publish<PlayerInfo>(PlayerInfo);
+    }
+
+    private void OnDataArrive(DataMsg msg)
+    {
+        MsgHead head = JsonConvert.DeserializeObject<MsgHead>(msg.head);
+        switch (head.module)
+        {
+            case "Chat":
+                EventBus.Publish<ChatEvent>(new ChatEvent(msg));
+                break;
+            default:
+                break;
+        }
     }
 
     public int ReceiveLocalInputs()

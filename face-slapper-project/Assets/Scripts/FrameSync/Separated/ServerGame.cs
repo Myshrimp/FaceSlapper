@@ -1,6 +1,10 @@
 using FaceSlapper.FrameSync;
 using System.Collections.Generic;
 using System.Linq;
+using FaceSlapper.Core;
+using FaceSlapper.FrameSync.Separated;
+using FaceSlapper.FrameSync.Separated.UI;
+using Newtonsoft.Json;
 using UnityEngine;
 public class ServerGame
 {
@@ -32,5 +36,18 @@ public class ServerGame
         GameState gt = new GameState();
         gt.playerStates = _players.Values.ToArray();
         return gt;
+    }
+
+    public void Handle(DataMsg msg)
+    {
+        MsgHead head = JsonConvert.DeserializeObject<MsgHead>(msg.head);
+        switch (head.module)
+        {
+            case "Chat":
+                EventBus.Publish<ChatEvent>(new ChatEvent(msg));
+                break;
+            default:
+                break;
+        }
     }
 }
