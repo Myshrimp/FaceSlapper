@@ -8,6 +8,8 @@ namespace FaceSlapper.FrameSync.Separated.Test
         public override void OnUpdate()
         {
             base.OnUpdate();
+            var selected = UnityEngine.EventSystems.EventSystem.current?.currentSelectedGameObject;
+            if (selected != null && selected.GetComponent<UnityEngine.UI.InputField>() != null) return;
             if (UnityEngine.Input.GetKeyDown(KeyCode.Q) && !ServerMain.ServerStarted)
             {
                 ServerMain.ServerStarted = true;

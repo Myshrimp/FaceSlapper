@@ -3,15 +3,19 @@ using System.Collections.Generic;
 using System.Linq;
 using FaceSlapper.Core;
 using FaceSlapper.FrameSync.Separated;
-using FaceSlapper.FrameSync.Separated.UI;
-using Newtonsoft.Json;
 using UnityEngine;
+using FaceSlapper.FrameSync.Separated.Services;
 public class ServerGame
 {
     private PlayerInfo[] _playerInfos;
     private Dictionary<int, PlayerState> _players=new();
+    private ServerMain _main;
+    public ServerMain ServerMain => _main;
 
-    public ServerGame() { }
+    public ServerGame(ServerMain main) 
+    { 
+        this._main = main; 
+    }
     public void OnInitPlayers(PlayerInfo[] playerInfos)
     {
         _playerInfos = playerInfos ?? new PlayerInfo[0];
@@ -38,16 +42,9 @@ public class ServerGame
         return gt;
     }
 
-    public void Handle(DataMsg msg)
+    public void Handle(DataMsg msg, int senderClientId)
     {
-        MsgHead head = JsonConvert.DeserializeObject<MsgHead>(msg.head);
-        switch (head.module)
-        {
-            case "Chat":
-                EventBus.Publish<ChatEvent>(new ChatEvent(msg));
-                break;
-            default:
-                break;
-        }
+        if (ChatService.TryReadMessage(msg, out _, out _))
+            EventBus.Publish(new ServerChatEvent(_main, msg, senderClientId));
     }
 }

@@ -7,14 +7,24 @@ namespace FaceSlapper.FrameSync.Separated.UI
     {
         private Text text;
 
-        private void Start()
+        private void Awake()
         {
-            text = transform.Find("Text").GetComponent<Text>();
+            text = GetComponentInChildren<Text>(true);
         }
 
         public void SetText(string txt)
         {
+            if (text == null) text = GetComponentInChildren<Text>(true);
+            if (text == null)
+            {
+                Debug.LogWarning("[ChatTextItem] Text component is missing");
+                return;
+            }
+            text.supportRichText = false;
             text.text = txt;
+            LayoutElement layout = GetComponent<LayoutElement>();
+            if (layout != null)
+                layout.preferredHeight = Mathf.Max(24f, text.preferredHeight + 8f);
         }
     }
 }

@@ -2,18 +2,19 @@ using System;
 using System.Collections.Generic;
 using FaceSlapper.Core;
 using FaceSlapper.FrameSync.Separated;
+using FaceSlapper.FrameSync.Separated.Services;
 using FaceSlapper.FrameSync.Separated.Test;
 using FaceSlapper.Input;
 using FaceSlapper.Network;
 using UnityEngine;
 using Newtonsoft.Json;
-using FaceSlapper.FrameSync.Separated.Test;
 
 public class GameMain : MonoBehaviour
 {
     public ServerMain ServerMain;
     public PlayerInfo PlayerInfo;
-    public List<TestBase> Tests;
+    public List<TestBase> Tests = new List<TestBase>();
+    public ChatService Chat { get; private set; }
     private GameState GameState;
     private void Awake()
     {
@@ -29,6 +30,8 @@ public class GameMain : MonoBehaviour
         ServerMain.GameStateArrivedCb += OnGameStateArrived;
         ServerMain.ReceivePlayerInfoCb += OnAssignId;
         ServerMain.ServerDataArrivedCb += OnDataArrive;
+        Chat = new ChatService();
+        Chat.OnAddService(this, false);
 
         for (int i=0;i<Tests.Count;i++)
         {
@@ -60,14 +63,18 @@ public class GameMain : MonoBehaviour
 
     private void OnDataArrive(DataMsg msg)
     {
-        MsgHead head = JsonConvert.DeserializeObject<MsgHead>(msg.head);
-        switch (head.module)
+        if (ChatService.TryReadMessage(msg, out _, out _))
+            EventBus.Publish(new ChatEvent(msg));
+    }
+
+    private void OnDestroy()
+    {
+        Chat?.OnRemoveService(this);
+        if (ServerMain != null)
         {
-            case "Chat":
-                EventBus.Publish<ChatEvent>(new ChatEvent(msg));
-                break;
-            default:
-                break;
+            ServerMain.GameStateArrivedCb -= OnGameStateArrived;
+            ServerMain.ReceivePlayerInfoCb -= OnAssignId;
+            ServerMain.ServerDataArrivedCb -= OnDataArrive;
         }
     }
 

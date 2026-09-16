@@ -1,4 +1,7 @@
 using FaceSlapper.Core;
+using FaceSlapper.FrameSync.Separated;
+using FaceSlapper.FrameSync.Separated.Services;
+using FaceSlapper.FrameSync.Separated.Test;
 using FaceSlapper.Network;
 using FaceSlapper.Networking;
 using LiteNetLib.Utils;
@@ -20,6 +23,8 @@ public class ServerMain : NetBehaviour
     private int _connectionCount;
     [SerializeField]
     private NetObject _netObserver;
+    [SerializeField]
+    private List<string> _servicesName = new List<string> { nameof(ChatService) };
 
     public Dictionary<int, PlayerInfo> PlayerInfos;
     public Dictionary<int, PlayerState> Players;
@@ -27,11 +32,13 @@ public class ServerMain : NetBehaviour
     public GameState GameState;
     public bool ServerStarted;
     public bool ClientStarted; //TEST
+    public bool IsClientReady { get; private set; }
     public string IP="127.0.0.1";
     public Action<string> GameStateArrivedCb;
     public Action<string> ReceivePlayerInfoCb;
     public Action<DataMsg> ServerDataArrivedCb;
     private ServerGame game;
+    private readonly Dictionary<string, ServiceBase> _services = new Dictionary<string, ServiceBase>();
 
     public NetworkComponent NetworkComponent => GameManager.Instance.Get<NetworkComponent>();
     protected override void Awake()
@@ -39,19 +46,66 @@ public class ServerMain : NetBehaviour
         base.Awake();
         PlayerInfos = new Dictionary<int, PlayerInfo>();
         Players = new Dictionary<int, PlayerState>();
-        game = new ServerGame();
+        game = new ServerGame(this);
     }
 
     public override void OnNetSpawnServer()
     {
         base.OnNetSpawnServer();
+        Net.OnRemoteClientConnected -= OnClientConnected;
+        Net.OnRemoteClientDisconnected -= OnClientDisconnected;
         Net.OnRemoteClientConnected += OnClientConnected;
         Net.OnRemoteClientDisconnected += OnClientDisconnected;
+        if (_services.Count > 0) return;
+        if (_servicesName == null || _servicesName.Count == 0)
+            _servicesName = new List<string> { nameof(ChatService) };
+        foreach (string name in _servicesName)
+        {
+            if (string.IsNullOrWhiteSpace(name) || _services.ContainsKey(name)) continue;
+            Type type = Type.GetType($"FaceSlapper.FrameSync.Separated.Services.{name}");
+            if (type == null || type.IsAbstract || !typeof(ServiceBase).IsAssignableFrom(type))
+            {
+                Debug.LogWarning($"[ServerMain] Invalid service: {name}");
+                continue;
+            }
+            var service = (ServiceBase)Activator.CreateInstance(type);
+            service.OnAddService(this, true);
+            _services.Add(name, service);
+        }
+        Debug.Log($"[ServerMain] Registered {_services.Count} services");
+    }
+
+    public override void OnNetDespawnServer()
+    {
+        RemoveServices();
+        base.OnNetDespawnServer();
+    }
+
+    protected override void OnDestroy()
+    {
+        RemoveServices();
+        base.OnDestroy();
+    }
+
+    private void RemoveServices()
+    {
+        Net.OnRemoteClientConnected -= OnClientConnected;
+        Net.OnRemoteClientDisconnected -= OnClientDisconnected;
+        foreach (ServiceBase service in _services.Values)
+            service.OnRemoveService(this);
+        _services.Clear();
     }
 
     public override void OnNetSpawnClient()
     {
         base.OnNetSpawnClient();
+        IsClientReady = true;
+    }
+
+    public override void OnNetDespawnClient()
+    {
+        IsClientReady = false;
+        base.OnNetDespawnClient();
     }
 
     public void RequestGameData()
@@ -64,6 +118,25 @@ public class ServerMain : NetBehaviour
         SendServerRpc(nameof(CmdServerReceiveData), data);
     }
 
+    public void BroadcastData(DataMsg data)
+    {
+        SendObserversRpc(nameof(CmdClientReceiveData), JsonConvert.SerializeObject(data));
+    }
+
+    public void ObserverRpc(string method, params object[] args)
+    {
+        SendObserversRpc(method, args);
+    }
+
+    public void TargetRpc(int clientId, string method, params object[] args)
+    {
+        SendTargetRpc(clientId, method, args);
+    }
+
+    public void ServerRpc(string method, params object[] args)
+    {
+        SendServerRpc(method, args);
+    }
     private void OnClientConnected(int playerId)
     {
         RegisterPlayer(playerId);
@@ -129,15 +202,21 @@ public class ServerMain : NetBehaviour
     [NetRpc]
     private void CmdServerReceiveData(string data)
     {
-        DataMsg dataMsg = JsonConvert.DeserializeObject<DataMsg>(data);
-        game.Handle(dataMsg);
+        if (!IsServer) return;
+        int senderClientId = NetObject.RpcSenderClientId;
+        if (senderClientId < 0 && Net.IsHost)
+            senderClientId = Net.LocalClientId;
+        if (senderClientId < 0 || !Net.Server.ClientIds.Contains(senderClientId)) return;
+        if (Protocol.TryReadData(data, out DataMsg dataMsg))
+            game.Handle(dataMsg, senderClientId);
     }
 
     [NetRpc]
     private void CmdClientReceiveData(string data)
     {
-        DataMsg dataMsg = JsonConvert.DeserializeObject<DataMsg>(data);
-        ServerDataArrivedCb?.Invoke(dataMsg);
+        if (!IsClient || NetObject.RpcSenderClientId >= 0) return;
+        if (Protocol.TryReadData(data, out DataMsg dataMsg))
+            ServerDataArrivedCb?.Invoke(dataMsg);
     }
 }
 

@@ -137,6 +137,22 @@ SendTargetRpc(NetChannel.Unreliable, clientId, nameof(RpcSnapshot), tick, positi
 
 升级路径：后续可迁移到服务器权威物理（客户端预测 + 和解），`TickComponent` 已预留网络 Tick 挂载点。
 
+## 房间公共聊天（Separated / SyncTest）
+
+`Assets/Scenes/SyncTest.unity` 的聊天面板已绑定消息预制体、输入框、发送按钮与滚动列表。运行场景后按 Q 启动 Host，另一客户端按 R 连接 `ServerMain.IP`（默认本机）；输入文字后点击发送或按回车。输入框选中时不响应 Q/R/空格测试快捷键。离线、连接尚未分配 ID、客户端聊天对象尚未生成或校验失败时保留输入，并在面板显示原因。
+
+聊天通过默认可靠 RPC 传输，与帧同步输入流独立。客户端 `GameMain.Chat` 发起 `DataMsg`，服务器验证后向当前网络对象的观察者广播，客户端仅在收到服务器回显后显示一次。当前只支持公共聊天，不支持私聊和历史补发。
+
+- 外层：`DataMsg.head` / `DataMsg.body` 均为 JSON 字符串，外层 JSON 最长 8192 个字符。
+- 消息头统一使用 `MsgHead`：`module = "Chat"`、`eventType = "Message"`、`isBroadcast = true`；服务器用 RPC 连接的真实 ClientId 重建 `fromPlayer`，Host 本地发送使用本机连接 ID；发送者必须是当前连接。
+- 消息体使用 `ChatBody.message`：去除首尾空白后必须为 1～256 个 UTF-16 字符单位，空白、超长、错误 JSON 和非公共消息均不广播。
+- 服务端 `ChatService` 在 `ServerMain.OnNetSpawnServer` 注册，在服务器停止或对象销毁时释放；客户端服务由 `GameMain` 持有并随其销毁释放。服务端请求使用 `ServerChatEvent`，客户端展示使用 `ChatEvent`，避免 Host 重复处理及再次广播。
+- UI 以纯文本显示 `[User ClientId]:内容`，关闭富文本解析，自动换行并滚动到最新消息，只保留最近 100 条；`ChatTextItem` 支持实例化后立即设置文字。
+
+代码调用示例：`gameMain.Chat.TrySendMessage("你好", out string error)`，返回值表示本地校验通过并发起发送，不代表服务器已确认投递。定制服务列表应包含 `ChatService`；未配置或为空时默认注册它。
+
+回归测试：Unity 已恢复项目依赖且安装 .NET 10 SDK 后，执行 `powershell -NoProfile -ExecutionPolicy Bypass -File Tests/Chat/Run.ps1`。测试编译实际服务、事件总线、JSON 协议和 RPC 入口源码，以边界替身验证 Host/远端发送者、非法请求、一次回显、离线发送及服务重启清理；真实 UI、RPC 代码生成和网络传输仍需 Unity 联调。本次验证已通过 12 项聊天回归、18 项网络通道回归、Unity 2022.3.62f3 构建（含 FishNet 代码生成），以及独立 Host/客户端的按钮收发、服务器身份重建、非法消息拒绝、一次回显、长文本布局、100 条列表上限和离线保留输入检查；界面已完成渲染检查。
+
 ## 6. 其余模块设计要点
 
 - **GameManager/GameEntry**：组件注册表 + 统一生命周期分发（IUpdatable/IFixedUpdatable/ILateUpdatable）。

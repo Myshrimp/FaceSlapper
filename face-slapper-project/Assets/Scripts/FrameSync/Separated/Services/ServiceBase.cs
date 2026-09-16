@@ -4,18 +4,32 @@ namespace FaceSlapper.FrameSync.Separated.Services
 {
     public class ServiceBase : IService
     {
-        protected ServerGame game;
+        protected ServerMain serverMain;
+        protected GameMain gameMain;
         protected bool isServer;
         public virtual void OnAddService(object source, bool isServer)
         {
-            game = source as ServerGame;
-            //throw new System.NotImplementedException();
+            if (serverMain != null || gameMain != null)
+                OnRemoveService(null);
+            this.isServer = isServer;
+            if(isServer)
+            {
+                serverMain = (ServerMain)source;
+            }
+            else
+            {
+                gameMain = (GameMain)source;
+            }
+            OnAwake();
         }
 
         public virtual void OnRemoveService(object source)
         {
-            game = null;
-            //throw new System.NotImplementedException();
+            if (serverMain == null && gameMain == null) return;
+            OnDestroy();
+            serverMain = null;
+            gameMain = null;
+            isServer = false;
         }
 
         public virtual void OnUpdate()
