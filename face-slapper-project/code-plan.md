@@ -94,7 +94,7 @@ private static INetBackend CreateBackend() => new FishNetImpl.FishNetBackend();
 
 新后端需要实现：
 1. `INetBackend`（约 20 个方法/事件，直接映射到底层库 API）；
-2. 一个挂在网络对象上的桥接组件（实现 `INetObjectBridge`：5 个 RPC 通道 + NetVar 转发 + Transform 转发 + 生命周期转发）；
+2. 一个挂在网络对象上的桥接组件（实现 `INetObjectBridge`：三种 RPC 路由及其通道参数 + NetVar 转发 + Transform 转发 + 生命周期转发）；
 3. 编辑器钩子：给 Prefab 添加底层库组件、注册可生成对象、放置网络管理器。
 
 之后运行一次 `FaceSlapper/Setup All` 重建 Prefab/场景即可。
@@ -104,10 +104,27 @@ private static INetBackend CreateBackend() => new FishNetImpl.FishNetBackend();
 | 决策 | 说明 |
 |---|---|
 | 自研 NetVar/NetList | 用可靠 RPC 通道传输（值序列化为字节流），不依赖各库的 SyncVar 代码生成，三个后端写法完全一致；客户端 OnStartClient 时向服务器拉全量状态，解决迟加入/竞态 |
-| 自研 RPC 派发 | `[NetRpc]` 标记 + 方法名 + 类型标签参数序列化 + 反射缓存派发；语义三件套：SendServerRpc / SendObserversRpc / SendTargetRpc(clientId) |
+| 自研 RPC 派发 | `[NetRpc]` 标记 + 方法名 + 类型标签参数序列化 + 反射缓存派发；语义三件套：SendServerRpc / SendObserversRpc / SendTargetRpc(clientId)，默认可靠，通道重载支持 `NetChannel.Unreliable` |
 | 自研 NetTransformSync | 替代 NetworkTransform：控制端（Owner 或无主时的服务器）20Hz 不可靠广播，接收端 100ms 延迟插值；接收端刚体运动学，杜绝双重物理模拟 |
 | 身份用 int NetId | 对象查找 `Net.Server/Client.TryGetObject(netId)`，不暴露底层对象类型 |
 | 所有权抽象 | `NetObject.IsOwner/IsController/OwnerClientId` + `Net.Server.Give/RemoveOwnership` |
+
+### RPC 通道选择
+
+底层使用 FishNet Tugboat（LiteNetLib），同时支持可靠有序传输和不可靠 UDP，无需引入 KCP。`NetChannel` 位于后端无关的 Networking 层，三种 RPC 都可以显式选择通道；原有调用默认保持可靠。
+
+```csharp
+SendServerRpc(nameof(CmdInput), tick, moveX, moveY); // 默认可靠
+SendServerRpc(NetChannel.Unreliable, nameof(CmdInput), tick, moveX, moveY);
+SendObserversRpc(NetChannel.Unreliable, nameof(RpcSnapshot), tick, position);
+SendTargetRpc(NetChannel.Unreliable, clientId, nameof(RpcSnapshot), tick, position);
+```
+
+上述为调用形式示例，方法名和参数应替换为实际 `[NetRpc]` 方法。显式通道放在第一个参数，避免与原有 `params object[]` 中的业务枚举或零值混淆。通道从 `NetBehaviour` 经 `NetObject`、`INetObjectBridge` 传入 FishNet，不写入业务参数。服务端（含 Host）调用 ServerRpc 仍直接本地派发。
+
+不可靠通道不保证到达和顺序，适用于允许丢失且由后续消息覆盖的快照；需要顺序的接收方应使用业务 tick/序号丢弃旧数据。现有帧同步输入、聊天和业务 RPC 不自动切换通道；NetVar、全量状态补发仍可靠，Transform 同步仍不可靠。FishNet 会把超过不可靠 MTU 的 RPC 自动改走可靠通道，因此应控制快照大小。
+
+回归验证：安装 .NET 10 SDK 后，在项目目录执行 `powershell -NoProfile -ExecutionPolicy Bypass -File Tests/Networking/Run.ps1`。测试直接编译网络封装与序列化源码，仅替代 Unity 原生组件环境、全局服务器状态和底层桥接边界，覆盖三种路由的默认/显式通道、参数兼容、空参数、服务器发送限制与接收派发。该测试不替代 Unity 编译、FishNet RPC 代码生成及双端网络联调；联调时应分别验证客户端→服务器、服务器→观察者/指定客户端的小包，并在丢包/乱序条件下检查业务容错。
 
 ### 5.3 网络同步模型
 

@@ -88,34 +88,34 @@ namespace FaceSlapper.Networking
 
         // ---------------- RPC ----------------
 
-        internal void SendRpcToServer(string method, object[] args)
+        internal void SendRpcToServer(string method, object[] args, NetChannel channel = NetChannel.Reliable)
         {
             if (_bridge == null)
             {
                 Debug.LogWarning($"[NetObject] {name} 尚未在网络上生成，无法发送 ServerRpc {method}");
                 return;
             }
-            _bridge.SendServerRpc(method, NetSerializer.WriteArgs(args));
+            _bridge.SendServerRpc(method, NetSerializer.WriteArgs(args), channel);
         }
 
-        internal void SendRpcToObservers(string method, object[] args)
+        internal void SendRpcToObservers(string method, object[] args, NetChannel channel = NetChannel.Reliable)
         {
             if (_bridge == null || !Net.IsServer)
             {
                 Debug.LogWarning($"[NetObject] ObserversRpc {method} 只能在服务器上发送");
                 return;
             }
-            _bridge.SendObserversRpc(method, NetSerializer.WriteArgs(args));
+            _bridge.SendObserversRpc(method, NetSerializer.WriteArgs(args), channel);
         }
 
-        internal void SendRpcToTarget(int clientId, string method, object[] args)
+        internal void SendRpcToTarget(int clientId, string method, object[] args, NetChannel channel = NetChannel.Reliable)
         {
             if (_bridge == null || !Net.IsServer)
             {
                 Debug.LogWarning($"[NetObject] TargetRpc {method} 只能在服务器上发送");
                 return;
             }
-            _bridge.SendTargetRpc(clientId, method, NetSerializer.WriteArgs(args));
+            _bridge.SendTargetRpc(clientId, method, NetSerializer.WriteArgs(args), channel);
         }
 
         internal void DispatchRpc(string method, object[] args, int senderClientId = -1)

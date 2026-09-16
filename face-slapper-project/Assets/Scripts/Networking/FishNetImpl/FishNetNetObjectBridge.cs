@@ -68,26 +68,26 @@ namespace FaceSlapper.Networking.FishNetImpl
 
         // ---------------- INetObjectBridge ----------------
 
-        public void SendServerRpc(string method, byte[] args)
+        public void SendServerRpc(string method, byte[] args, NetChannel channel = NetChannel.Reliable)
         {
             // 服务器上调用（含 Host）直接本地派发，保证语义确定。
             if (IsServerInitialized)
                 _netObject.DispatchRpc(method, NetSerializer.ReadArgs(args));
             else
-                RpcToServer(method, args, Channel.Reliable);
+                RpcToServer(method, args, ToFishNetChannel(channel));
         }
 
-        public void SendObserversRpc(string method, byte[] args)
+        public void SendObserversRpc(string method, byte[] args, NetChannel channel = NetChannel.Reliable)
         {
             if (IsServerInitialized)
-                RpcToObservers(method, args, Channel.Reliable);
+                RpcToObservers(method, args, ToFishNetChannel(channel));
         }
 
-        public void SendTargetRpc(int clientId, string method, byte[] args)
+        public void SendTargetRpc(int clientId, string method, byte[] args, NetChannel channel = NetChannel.Reliable)
         {
             if (!IsServerInitialized) return;
             if (ServerManager.Clients.TryGetValue(clientId, out NetworkConnection conn))
-                RpcToTarget(conn, method, args);
+                RpcToTarget(conn, method, args, ToFishNetChannel(channel));
         }
 
         public void SendNetVar(int varId, byte[] payload)
@@ -117,6 +117,9 @@ namespace FaceSlapper.Networking.FishNetImpl
                 RpcFullStateRequest();
         }
 
+        private static Channel ToFishNetChannel(NetChannel channel)
+            => channel == NetChannel.Unreliable ? Channel.Unreliable : Channel.Reliable;
+
         // ---------------- FishNet RPC 通道 ----------------
 
         [ServerRpc(RequireOwnership = false)]
@@ -133,7 +136,7 @@ namespace FaceSlapper.Networking.FishNetImpl
         }
 
         [TargetRpc]
-        private void RpcToTarget(NetworkConnection conn, string method, byte[] args)
+        private void RpcToTarget(NetworkConnection conn, string method, byte[] args, Channel channel = Channel.Reliable)
         {
             _netObject.DispatchRpc(method, NetSerializer.ReadArgs(args));
         }

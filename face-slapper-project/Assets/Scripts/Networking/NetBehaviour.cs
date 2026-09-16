@@ -60,19 +60,37 @@ namespace FaceSlapper.Networking
         /// <summary>客户端 → 服务器 调用本对象上的 [NetRpc] 方法。</summary>
         protected void SendServerRpc(string method, params object[] args)
         {
-            NetObject.SendRpcToServer(method, args);
+            SendServerRpc(NetChannel.Reliable, method, args);
+        }
+
+        /// <summary>通过指定通道发送 RPC；不可靠通道不保证到达或顺序。</summary>
+        protected void SendServerRpc(NetChannel channel, string method, params object[] args)
+        {
+            NetObject.SendRpcToServer(method, args, channel);
         }
 
         /// <summary>服务器 → 所有观察者 调用本对象上的 [NetRpc] 方法。</summary>
         protected void SendObserversRpc(string method, params object[] args)
         {
-            NetObject.SendRpcToObservers(method, args);
+            SendObserversRpc(NetChannel.Reliable, method, args);
+        }
+
+        /// <summary>通过指定通道发送 RPC；不可靠通道不保证到达或顺序。</summary>
+        protected void SendObserversRpc(NetChannel channel, string method, params object[] args)
+        {
+            NetObject.SendRpcToObservers(method, args, channel);
         }
 
         /// <summary>服务器 → 指定客户端 调用本对象上的 [NetRpc] 方法。</summary>
         protected void SendTargetRpc(int clientId, string method, params object[] args)
         {
-            NetObject.SendRpcToTarget(clientId, method, args);
+            SendTargetRpc(NetChannel.Reliable, clientId, method, args);
+        }
+
+        /// <summary>通过指定通道发送 RPC；不可靠通道不保证到达或顺序。</summary>
+        protected void SendTargetRpc(NetChannel channel, int clientId, string method, params object[] args)
+        {
+            NetObject.SendRpcToTarget(clientId, method, args, channel);
         }
 
         // ---------------- NetVar 写入（框架内部回调） ----------------

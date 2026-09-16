@@ -17,14 +17,14 @@ namespace FaceSlapper.Networking
         /// <summary>本机是否拥有该对象的所有权。</summary>
         bool IsOwner { get; }
 
-        /// <summary>客户端 → 服务器 的 RPC（可靠）。服务器上调用则本地直接派发。</summary>
-        void SendServerRpc(string method, byte[] args);
+        /// <summary>客户端 → 服务器 的 RPC（默认可靠，可选不可靠）。服务器上调用则本地直接派发。</summary>
+        void SendServerRpc(string method, byte[] args, NetChannel channel = NetChannel.Reliable);
 
-        /// <summary>服务器 → 所有观察者 的 RPC（可靠）。</summary>
-        void SendObserversRpc(string method, byte[] args);
+        /// <summary>服务器 → 所有观察者 的 RPC（默认可靠，可选不可靠）。</summary>
+        void SendObserversRpc(string method, byte[] args, NetChannel channel = NetChannel.Reliable);
 
-        /// <summary>服务器 → 指定客户端 的 RPC（可靠）。</summary>
-        void SendTargetRpc(int clientId, string method, byte[] args);
+        /// <summary>服务器 → 指定客户端 的 RPC（默认可靠，可选不可靠）。</summary>
+        void SendTargetRpc(int clientId, string method, byte[] args, NetChannel channel = NetChannel.Reliable);
 
         /// <summary>服务器 → 所有观察者 的 NetVar 同步（可靠）。</summary>
         void SendNetVar(int varId, byte[] payload);
